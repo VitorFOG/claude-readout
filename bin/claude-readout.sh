@@ -56,7 +56,7 @@ if [ -z "$NODE_BIN" ]; then
 fi
 
 if [ -z "$NODE_BIN" ]; then
-  printf 'readout: no node found (set READOUT_NODE to an absolute path)\n'
+  printf 'claude-readout: no node found (set READOUT_NODE to an absolute path)\n'
   exit 0
 fi
 

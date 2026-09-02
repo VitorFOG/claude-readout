@@ -23,28 +23,45 @@ on one line.
 ## Install
 
 ```sh
-git clone https://github.com/VitorFOG/claude-readout ~/.local/src/claude-readout
+npm install -g claude-readout
 ```
 
-Then point Claude Code at it — `~/.claude/settings.json`:
+Then point Claude Code at it in `~/.claude/settings.json`:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "node ~/.local/src/claude-readout/bin/claude-readout.mjs"
+    "command": "claude-readout"
   }
 }
 ```
 
-If `node` isn't on `PATH` in non-interactive shells — which is the normal case for nvm, fnm and
-volta users — point Claude Code at the launcher instead, which finds node itself:
+Claude Code runs the statusline through a *non-interactive* shell, which does not source the
+profile that puts nvm/fnm/volta on `PATH`. If the bare name doesn't resolve, use the absolute
+path that `which claude-readout` prints.
 
-```json
-{ "statusLine": { "type": "command", "command": "sh ~/.local/src/claude-readout/bin/claude-readout.sh" } }
+<details>
+<summary>From a clone instead</summary>
+
+```sh
+git clone https://github.com/VitorFOG/claude-readout ~/.local/src/claude-readout
 ```
 
-Set `READOUT_NODE` to an absolute path to override its search.
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "sh ~/.local/src/claude-readout/bin/claude-readout.sh"
+  }
+}
+```
+
+`claude-readout.sh` is a launcher that finds node on its own — nvm, fnm, volta, asdf, nodenv,
+Homebrew and system paths — so it works with nothing on `PATH`. Override its search with
+`READOUT_NODE`.
+
+</details>
 
 Requires Node 18+ and a [Nerd Font](https://www.nerdfonts.com/) in your terminal. Check the
 glyphs render:
