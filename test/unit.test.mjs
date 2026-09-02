@@ -226,6 +226,18 @@ describe("render", () => {
     assert.equal(out, "Fable ██░░░░░░ 22%");
   });
 
+  it("does not repeat the name when the glyph already is the name", () => {
+    const out = renderHud({
+      payload,
+      config: { ...config, glyphs: "text", labels: "always" },
+      git: null,
+      scoped: [],
+      toolCalls: null,
+    });
+    assert.equal(/5h\s+5h/.test(out), false, '"glyphs": "text" must not print "5h 5h"');
+    assert.match(out, /5h .*38%/);
+  });
+
   it("names the quota meters so look-alike bars stay identifiable", () => {
     const out = renderHud({
       payload,
@@ -313,11 +325,74 @@ describe("render", () => {
     assert.equal(out, "model Sonnet 5");
   });
 
-  it("drops trailing elements to fit the terminal width", () => {
-    const wide = renderHud({ payload, config, git: null, scoped: [], toolCalls: 108 });
-    const narrow = renderHud({ payload, config, git: null, scoped: [], toolCalls: 108, columns: 40 });
-    assert.ok(visibleWidth(narrow) <= visibleWidth(wide));
-    assert.ok(narrow.startsWith("model Opus 5"), "keeps the highest-priority element");
+  const widthCase = (columns, extra = {}) =>
+    renderHud({
+      payload,
+      config: { ...config, ...extra },
+      git: null,
+      scoped: [{ id: "fable", label: "Fable", percent: 22, resetsAt: null }],
+      toolCalls: 108,
+      columns,
+    });
+
+  it("keeps every line inside the given width", () => {
+    for (const columns of [200, 130, 110, 94, 80, 65, 50, 40, 30]) {
+      for (const line of widthCase(columns).split("\n")) {
+        assert.ok(
+          visibleWidth(line) <= columns,
+          `width ${columns}: line of ${visibleWidth(line)} cells: ${line}`,
+        );
+      }
+    }
+  });
+
+  it("gives up reset times before it gives up bars", () => {
+    const roomy = widthCase(200);
+    const tighter = widthCase(120);
+    assert.match(roomy, /\(\d/, "reset time shown when there is room");
+    assert.equal(/\(\d/.test(tighter), false, "reset time dropped first");
+    assert.match(tighter, /█/, "bars survive longer than reset times");
+  });
+
+  it("sheds the least useful elements last, keeping the quota meters", () => {
+    const narrow = widthCase(46);
+    assert.match(narrow, /Opus 5/);
+    assert.match(narrow, /5h .*38%/);
+    assert.equal(narrow.includes("tools"), false, "tool count goes first");
+  });
+
+  it("shows at least one block for any non-zero usage", () => {
+    // On a 3-cell bar, 14% rounds to zero filled; an empty bar would state
+    // something false.
+    const out = renderHud({
+      payload: { rate_limits: { seven_day: { used_percentage: 4 } } },
+      config: { ...config, barWidth: 3 },
+      git: null,
+      scoped: [],
+      toolCalls: null,
+    });
+    assert.match(out, /█/);
+  });
+
+  it("wraps instead of shedding when overflow is wrap", () => {
+    const out = widthCase(60, { overflow: "wrap" });
+    assert.ok(out.split("\n").length > 1, "spills onto more lines");
+    assert.match(out, /Fable/, "nothing is lost");
+    for (const line of out.split("\n")) assert.ok(visibleWidth(line) <= 60);
+  });
+
+  it("clips an over-long git line rather than pushing the width", () => {
+    const out = renderHud({
+      payload,
+      config,
+      git: { repo: "r", branch: "feature/" + "x".repeat(120), staged: 0, modified: 0, untracked: 0, ahead: 0, behind: 0 },
+      scoped: [],
+      toolCalls: null,
+      columns: 50,
+    });
+    const [gitLine] = out.split("\n");
+    assert.ok(visibleWidth(gitLine) <= 50);
+    assert.match(gitLine, /\u2026$/);
   });
 
   it("survives an empty payload", () => {

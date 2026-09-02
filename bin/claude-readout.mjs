@@ -149,7 +149,14 @@ async function main() {
     }
   }
 
-  const columns = Number(process.env.READOUT_COLUMNS) || process.stdout.columns || undefined;
+  // Claude Code invokes the statusline with stdout piped, so `process.stdout.columns`
+  // is always undefined and /dev/tty is not reachable. It does export COLUMNS,
+  // which is the only width signal available here.
+  const columns =
+    Number(process.env.READOUT_COLUMNS) ||
+    Number(process.env.COLUMNS) ||
+    process.stdout.columns ||
+    undefined;
 
   console.log(
     renderHud({

@@ -127,6 +127,27 @@ model a bar belongs to, and for the same reason they carry no icon — one would
 name. Give them a glyph with `"glyphs": { "scoped": "" }` if you want one. Rename the built-ins
 with `"names": { "fiveHour": "5h", "weekly": "week", "context": "ctx" }`.
 
+**Narrow terminals.** The line adapts to the width Claude Code reports, shrinking on its own
+terms instead of being cut off mid-element with an ellipsis. It gives things up in this order:
+reset times, then bar width (8 → 5 → 3 → none, leaving bare percentages), and only then whole
+elements, least useful first — tool count, session, thinking, context, and so on, so the quota
+meters are the last thing standing.
+
+| `overflow` | Behaviour |
+| --- | --- |
+| `"shrink"` *(default)* | Compact, then give up elements. Stays on one line. |
+| `"wrap"` | Compact, then continue onto more lines. Nothing is lost. |
+| `"none"` | Render full width and let Claude Code truncate. |
+
+`reserveColumns` (default 2) holds cells back for the pane's border. Width comes from the
+`COLUMNS` environment variable, which is the only signal available — Claude Code pipes the
+statusline's stdout, so `process.stdout.columns` is undefined and `/dev/tty` is unreachable.
+Override it with `READOUT_COLUMNS` for testing:
+
+```sh
+COLUMNS=80 node bin/claude-readout.mjs < test/fixture-session.json
+```
+
 **Other keys.** `usageApi: false` skips the usage request entirely — you keep the 5-hour and
 weekly meters from stdin and lose only the per-model buckets. `usageTtlSeconds` (default 120)
 controls how often that snapshot refreshes. `separator` overrides the `│` between elements.

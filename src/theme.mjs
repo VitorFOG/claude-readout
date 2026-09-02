@@ -109,6 +109,14 @@ export const DEFAULT_CONFIG = {
   labels: "auto",
   names: { fiveHour: "5h", weekly: "wk", context: "ctx" },
   separator: null, // null = use the theme glyph
+  /**
+   * What to do when the line will not fit: "shrink" compacts, then gives up the
+   * least useful elements; "wrap" compacts, then continues onto more lines;
+   * "none" renders full width and lets Claude Code truncate.
+   */
+  overflow: "shrink",
+  /** Cells held back from COLUMNS for the pane's own border and padding. */
+  reserveColumns: 2,
   showGitLine: true,
   elements: {
     model: true,

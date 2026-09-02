@@ -56,8 +56,12 @@ export function visibleWidth(text) {
 }
 
 function meter(percent, width, palette) {
+  if (!(width > 0)) return null; // width 0 = numbers only, the tightest layout
   const safe = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
-  const filled = Math.round((safe / 100) * width);
+  // Any non-zero usage shows at least one block. On a 3-cell bar 14% rounds to
+  // zero filled, and an empty bar states something false — that none is used.
+  const scaled = Math.round((safe / 100) * width);
+  const filled = safe > 0 ? Math.max(1, scaled) : scaled;
   const color = rampColor(safe, palette.bar);
   return (
     fgRgb(color, BAR_FILLED.repeat(filled)) + fg(palette.barEmpty, BAR_EMPTY.repeat(width - filled))
@@ -75,16 +79,20 @@ function meter(percent, width, palette) {
  *
  * `tint` overrides the glyph colour (model-scoped buckets get their own hue).
  */
-function gauge({ glyph, label, percent, resetsAt, width, palette, tint }) {
+function gauge({ glyph, label, percent, resetsAt, width, palette, tint, showReset = true }) {
   if (percent == null) return null;
   const value = Math.round(percent);
   const parts = [];
   if (glyph) parts.push(fg(tint ?? palette.muted, glyph));
-  if (label) parts.push(fg(tint ?? palette.muted, label));
-  parts.push(meter(value, width, palette), fgRgb(rampColor(value, palette.bar), `${value}%`));
+  // Under `"glyphs": "text"` the glyph already IS the name, so printing the
+  // label too would render "5h 5h 38%".
+  if (label && label !== glyph) parts.push(fg(tint ?? palette.muted, label));
+  const bar = meter(value, width, palette);
+  if (bar) parts.push(bar);
+  parts.push(fgRgb(rampColor(value, palette.bar), `${value}%`));
   // The reset time is context, not a headline: parenthesised and dimmed into the
   // muted tone so the eye lands on the percentage first.
-  const until = formatUntil(resetsAt);
+  const until = showReset ? formatUntil(resetsAt) : null;
   if (until) parts.push(dimFg(palette.muted, `(${until})`));
   return parts.join(" ");
 }
@@ -157,6 +165,134 @@ function renderGitLine(git, glyphs, palette, elements) {
 }
 
 /**
+ * Progressive compaction levels, widest first.
+ *
+ * Claude Code hard-truncates an over-long statusline with an ellipsis, which
+ * silently eats whole elements off the right. Shrinking on our own terms keeps
+ * every element visible for far longer: reset times go first (they are the
+ * least urgent thing on the line), then the bars narrow, and finally the bars
+ * disappear entirely and the meters read as bare percentages.
+ */
+function compactionLevels(config) {
+  const bar = config.barWidth ?? 8;
+  const ctx = config.contextBarWidth ?? 10;
+  return [
+    { showResets: true, bar, ctx },
+    { showResets: false, bar, ctx },
+    { showResets: false, bar: Math.min(bar, 5), ctx: Math.min(ctx, 6) },
+    { showResets: false, bar: 3, ctx: 3 },
+    { showResets: false, bar: 0, ctx: 0 },
+  ];
+}
+
+/**
+ * Order in which elements are given up when even the tightest layout does not
+ * fit. Least useful first: a tool count is trivia next to how much of your
+ * weekly quota is gone.
+ */
+const DEFAULT_SHED_ORDER = ["cost", "tools", "session", "thinking", "context", "scoped", "weekly", "fiveHour", "model"];
+
+/** Build the main-line elements as re-renderable descriptors. */
+function buildElements({ payload, config, scoped, toolCalls, glyphs, palette }) {
+  const elements = config.elements ?? {};
+  const limits = payload.rate_limits ?? {};
+  const labelMode = config.labels ?? "auto";
+  const out = [];
+  const add = (key, render) => out.push({ key, render });
+
+  if (elements.model !== false) add("model", () => renderModel(payload, glyphs, palette));
+
+  if (elements.fiveHour !== false) {
+    add("fiveHour", (level) =>
+      gauge({
+        glyph: glyphs.fiveHour,
+        label: labelFor({ mode: labelMode, name: config.names?.fiveHour ?? "5h", ambiguous: true }),
+        percent: limits.five_hour?.used_percentage,
+        resetsAt: limits.five_hour?.resets_at,
+        width: level.bar,
+        showReset: level.showResets,
+        palette,
+      }));
+  }
+
+  if (elements.weekly !== false) {
+    add("weekly", (level) =>
+      gauge({
+        glyph: glyphs.weekly,
+        label: labelFor({ mode: labelMode, name: config.names?.weekly ?? "wk", ambiguous: true }),
+        percent: limits.seven_day?.used_percentage,
+        resetsAt: limits.seven_day?.resets_at,
+        width: level.bar,
+        showReset: level.showResets,
+        palette,
+      }));
+  }
+
+  if (elements.scoped !== false) {
+    for (const bucket of scoped ?? []) {
+      // A scoped bucket is named after a model, so it keeps its name at every
+      // level — without it the bar is unidentifiable by construction.
+      add("scoped", (level) =>
+        gauge({
+          glyph: glyphs.scoped || "",
+          label: bucket.label,
+          percent: bucket.percent,
+          resetsAt: bucket.resetsAt,
+          width: level.bar,
+          showReset: level.showResets,
+          palette,
+          tint: palette.scoped,
+        }));
+    }
+  }
+
+  if (elements.context !== false) {
+    const used = payload.context_window?.used_percentage;
+    if (Number.isFinite(used)) {
+      add("context", (level) =>
+        gauge({
+          glyph: glyphs.context,
+          label: labelFor({ mode: labelMode, name: config.names?.context ?? "ctx", ambiguous: false }),
+          percent: used,
+          width: level.ctx,
+          palette,
+        }));
+    }
+  }
+
+  if (elements.thinking !== false) add("thinking", () => renderThinking(payload, glyphs, palette));
+  if (elements.session !== false) add("session", () => renderSession(payload, glyphs, palette));
+  if (elements.tools !== false) add("tools", () => renderTools(toolCalls, glyphs, palette));
+  if (elements.cost === true) add("cost", () => renderCost(payload, glyphs, palette));
+
+  return out;
+}
+
+/** Split a rendered list across as many lines as the width requires. */
+function wrapParts(parts, sep, width) {
+  const lines = [];
+  let current = [];
+  for (const part of parts) {
+    const candidate = [...current, part];
+    if (current.length > 0 && visibleWidth(candidate.join(sep)) > width) {
+      lines.push(current.join(sep));
+      current = [part];
+    } else {
+      current = candidate;
+    }
+  }
+  if (current.length > 0) lines.push(current.join(sep));
+  return lines;
+}
+
+/** Cut a string to `width` cells, marking the cut with an ellipsis. */
+function clip(text, width) {
+  if (visibleWidth(text) <= width) return text;
+  const plain = stripAnsi(text);
+  return `${plain.slice(0, Math.max(0, width - 1))}\u2026`;
+}
+
+/**
  * @param {object} input
  * @param {object} input.payload  Claude Code statusline stdin, parsed.
  * @param {object} input.config
@@ -164,106 +300,68 @@ function renderGitLine(git, glyphs, palette, elements) {
  * @param {Array}  input.scoped   Model-scoped weekly buckets from the usage cache.
  * @param {number|null} input.toolCalls
  * @param {number|undefined} input.columns  Terminal width, when known.
- * @returns {string} the finished statusline (may contain one newline).
+ * @returns {string} the finished statusline (may contain newlines).
  */
 export function renderHud({ payload, config, git, scoped, toolCalls, columns }) {
   const glyphs = resolveGlyphs(config);
   const palette = resolvePalette(config);
-  const elements = config.elements ?? {};
   const sep = ` ${dim(config.separator ?? glyphs.separator)} `;
-  const limits = payload.rate_limits ?? {};
+  const overflow = config.overflow ?? "shrink";
 
-  const main = [];
-  const push = (value) => {
-    if (value) main.push(value);
-  };
+  const descriptors = buildElements({ payload, config, scoped, toolCalls, glyphs, palette });
+  const levels = compactionLevels(config);
+  const compose = (level, keep) =>
+    descriptors
+      .filter((d) => !keep || keep.has(d))
+      .map((d) => d.render(level))
+      .filter(Boolean);
 
-  if (elements.model !== false) push(renderModel(payload, glyphs, palette));
+  const width =
+    Number.isFinite(columns) && columns > 20
+      ? Math.max(20, columns - (config.reserveColumns ?? 2))
+      : null;
 
-  const labelMode = config.labels ?? "auto";
-
-  if (elements.fiveHour !== false) {
-    push(
-      gauge({
-        glyph: glyphs.fiveHour,
-        label: labelFor({ mode: labelMode, name: config.names?.fiveHour ?? "5h", ambiguous: true }),
-        percent: limits.five_hour?.used_percentage,
-        resetsAt: limits.five_hour?.resets_at,
-        width: config.barWidth,
-        palette,
-      }),
-    );
-  }
-
-  if (elements.weekly !== false) {
-    push(
-      gauge({
-        glyph: glyphs.weekly,
-        label: labelFor({ mode: labelMode, name: config.names?.weekly ?? "wk", ambiguous: true }),
-        percent: limits.seven_day?.used_percentage,
-        resetsAt: limits.seven_day?.resets_at,
-        width: config.barWidth,
-        palette,
-      }),
-    );
-  }
-
-  if (elements.scoped !== false) {
-    for (const bucket of scoped ?? []) {
-      // A scoped bucket is named after a model, so it keeps its name even in
-      // "never" mode — without it the bar is unidentifiable by construction.
-      push(
-        gauge({
-          glyph: glyphs.scoped || "",
-          label: bucket.label,
-          percent: bucket.percent,
-          resetsAt: bucket.resetsAt,
-          width: config.barWidth,
-          palette,
-          tint: palette.scoped,
-        }),
-      );
+  let parts = compose(levels[0]);
+  if (width !== null && overflow !== "none") {
+    // Take the widest layout that fits.
+    const level = levels.find((l) => visibleWidth(compose(l).join(sep)) <= width);
+    if (level) {
+      parts = compose(level);
+    } else if (overflow === "wrap") {
+      parts = compose(levels[levels.length - 1]);
+    } else {
+      // Still too wide at the tightest layout: give up elements, least useful
+      // first, rather than letting the terminal amputate the right-hand end.
+      const tightest = levels[levels.length - 1];
+      const shedOrder = config.shedOrder ?? DEFAULT_SHED_ORDER;
+      const keep = new Set(descriptors);
+      for (const key of shedOrder) {
+        if (visibleWidth(compose(tightest, keep).join(sep)) <= width) break;
+        for (const d of [...keep].reverse()) {
+          if (d.key === key) {
+            keep.delete(d);
+            break; // shed one instance at a time; scoped can repeat
+          }
+        }
+      }
+      parts = compose(tightest, keep);
     }
   }
-
-  if (elements.context !== false) {
-    const used = payload.context_window?.used_percentage;
-    if (Number.isFinite(used)) {
-      push(
-        gauge({
-          glyph: glyphs.context,
-          label: labelFor({
-            mode: labelMode,
-            name: config.names?.context ?? "ctx",
-            ambiguous: false,
-          }),
-          percent: used,
-          width: config.contextBarWidth,
-          palette,
-        }),
-      );
-    }
-  }
-
-  if (elements.thinking !== false) push(renderThinking(payload, glyphs, palette));
-  if (elements.session !== false) push(renderSession(payload, glyphs, palette));
-  if (elements.tools !== false) push(renderTools(toolCalls, glyphs, palette));
-  if (elements.cost === true) push(renderCost(payload, glyphs, palette));
 
   const lines = [];
   if (config.showGitLine !== false) {
-    const gitParts = renderGitLine(git, glyphs, palette, elements);
-    if (gitParts) lines.push(gitParts.join(sep));
+    const gitParts = renderGitLine(git, glyphs, palette, config.elements ?? {});
+    if (gitParts) {
+      const gitLine = gitParts.join(sep);
+      lines.push(width === null ? gitLine : clip(gitLine, width));
+    }
   }
 
-  // Drop trailing elements rather than letting the terminal hard-wrap mid-glyph.
-  let mainLine = main.join(sep);
-  if (Number.isFinite(columns) && columns > 20) {
-    let kept = [...main];
-    while (kept.length > 1 && visibleWidth(kept.join(sep)) > columns) kept.pop();
-    mainLine = kept.join(sep);
+  if (width !== null && overflow === "wrap") {
+    lines.push(...wrapParts(parts, sep, width));
+  } else {
+    lines.push(parts.join(sep));
   }
-  lines.push(mainLine);
 
   return lines.join("\n");
 }
