@@ -1,0 +1,42 @@
+{
+  "name": "@vitorfog/claude-hud",
+  "version": "0.1.0",
+  "description": "A Nerd Font statusline for Claude Code \u2014 model, rate limits, per-model weekly quotas, context and git, in truecolor.",
+  "type": "module",
+  "bin": {
+    "claude-hud": "bin/claude-hud.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "author": "VitorFOG",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "statusline",
+    "hud",
+    "nerd-fonts",
+    "terminal"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VitorFOG/claude-hud.git"
+  },
+  "homepage": "https://github.com/VitorFOG/claude-hud#readme",
+  "bugs": {
+    "url": "https://github.com/VitorFOG/claude-hud/issues"
+  },
+  "scripts": {
+    "test": "node --test 'test/*.test.mjs'"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
