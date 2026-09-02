@@ -10,7 +10,7 @@ import { parseScopedBuckets } from "../src/usage.mjs";
 import { countToolCalls } from "../src/transcript.mjs";
 import { DEFAULT_CONFIG } from "../src/theme.mjs";
 
-const scratch = mkdtempSync(join(tmpdir(), "claude-hud-test-"));
+const scratch = mkdtempSync(join(tmpdir(), "claude-readout-test-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe("color", () => {

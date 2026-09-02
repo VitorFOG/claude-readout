@@ -1,10 +1,10 @@
 {
-  "name": "@vitorfog/claude-hud",
+  "name": "claude-readout",
   "version": "0.1.0",
   "description": "A Nerd Font statusline for Claude Code \u2014 model, rate limits, per-model weekly quotas, context and git, in truecolor.",
   "type": "module",
   "bin": {
-    "claude-hud": "bin/claude-hud.mjs"
+    "claude-readout": "bin/claude-readout.mjs"
   },
   "files": [
     "bin",
@@ -27,16 +27,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/VitorFOG/claude-hud.git"
+    "url": "git+https://github.com/VitorFOG/claude-readout.git"
   },
-  "homepage": "https://github.com/VitorFOG/claude-hud#readme",
+  "homepage": "https://github.com/VitorFOG/claude-readout#readme",
   "bugs": {
-    "url": "https://github.com/VitorFOG/claude-hud/issues"
+    "url": "https://github.com/VitorFOG/claude-readout/issues"
   },
   "scripts": {
     "test": "node --test 'test/*.test.mjs'"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

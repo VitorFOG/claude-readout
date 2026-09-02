@@ -1,4 +1,6 @@
-# claude-hud
+# claude-readout
+
+> *readout* — the display face of a measuring instrument.
 
 A Nerd Font statusline for [Claude Code](https://claude.com/claude-code). Model, rate-limit
 meters, per-model weekly quotas, context usage, session time, tool calls and git — in truecolor,
@@ -21,7 +23,7 @@ on one line.
 ## Install
 
 ```sh
-git clone https://github.com/VitorFOG/claude-hud ~/.local/src/claude-hud
+git clone https://github.com/VitorFOG/claude-readout ~/.local/src/claude-readout
 ```
 
 Then point Claude Code at it — `~/.claude/settings.json`:
@@ -30,7 +32,7 @@ Then point Claude Code at it — `~/.claude/settings.json`:
 {
   "statusLine": {
     "type": "command",
-    "command": "node ~/.local/src/claude-hud/bin/claude-hud.mjs"
+    "command": "node ~/.local/src/claude-readout/bin/claude-readout.mjs"
   }
 }
 ```
@@ -39,16 +41,16 @@ If `node` isn't on `PATH` in non-interactive shells — which is the normal case
 volta users — point Claude Code at the launcher instead, which finds node itself:
 
 ```json
-{ "statusLine": { "type": "command", "command": "sh ~/.local/src/claude-hud/bin/claude-hud.sh" } }
+{ "statusLine": { "type": "command", "command": "sh ~/.local/src/claude-readout/bin/claude-readout.sh" } }
 ```
 
-Set `CLAUDE_HUD_NODE` to an absolute path to override its search.
+Set `READOUT_NODE` to an absolute path to override its search.
 
 Requires Node 18+ and a [Nerd Font](https://www.nerdfonts.com/) in your terminal. Check the
 glyphs render:
 
 ```sh
-node bin/claude-hud.mjs --legend
+node bin/claude-readout.mjs --legend
 ```
 
 Any box or blank means your font lacks that glyph — override it in the config, or switch the
@@ -74,7 +76,7 @@ statusline on stdin, which is why it's cheap.
 
 ## Configuration
 
-Optional, at `~/.config/claude-hud/config.json` (or `$CLAUDE_HUD_CONFIG`). Every key is an
+Optional, at `~/.config/claude-readout/config.json` (or `$READOUT_CONFIG`). Every key is an
 override — omit anything you don't care about.
 
 ```json
@@ -141,8 +143,8 @@ on macOS). The response's `limits[]` array is walked for `kind: "weekly_scoped"`
 labelled by `scope.model.display_name` — so a new model tier appears on its own, with no release
 here.
 
-That request never happens on the render path. `claude-hud` reads a cached snapshot from
-`~/.cache/claude-hud/usage.json` and, if it's older than the TTL, spawns a detached
+That request never happens on the render path. `claude-readout` reads a cached snapshot from
+`~/.cache/claude-readout/usage.json` and, if it's older than the TTL, spawns a detached
 `--refresh-usage` process for the next frame. A cold cache costs you the per-model bars for one
 frame and nothing else.
 
@@ -153,15 +155,15 @@ until Claude Code renews it.
 ## Troubleshooting
 
 ```sh
-node bin/claude-hud.mjs --doctor    # config path, token, cache age, colour support
-node bin/claude-hud.mjs --legend    # what each element means, and a font check
-node bin/claude-hud.mjs --refresh-usage   # force a usage fetch now
+node bin/claude-readout.mjs --doctor    # config path, token, cache age, colour support
+node bin/claude-readout.mjs --legend    # what each element means, and a font check
+node bin/claude-readout.mjs --refresh-usage   # force a usage fetch now
 ```
 
 Render it by hand against a captured payload:
 
 ```sh
-node bin/claude-hud.mjs < test/fixture-session.json
+node bin/claude-readout.mjs < test/fixture-session.json
 ```
 
 A render takes about 60ms, roughly 20ms of which is Node's own startup.

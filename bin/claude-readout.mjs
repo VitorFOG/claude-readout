@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * claude-hud — a Nerd Font statusline for Claude Code.
+ * readout — a Nerd Font statusline for Claude Code.
  *
  * Contract: read Claude Code's statusline JSON on stdin, print the line(s) on
  * stdout, exit 0. Anything that goes wrong is swallowed and the process still
@@ -149,7 +149,7 @@ async function main() {
     }
   }
 
-  const columns = Number(process.env.CLAUDE_HUD_COLUMNS) || process.stdout.columns || undefined;
+  const columns = Number(process.env.READOUT_COLUMNS) || process.stdout.columns || undefined;
 
   console.log(
     renderHud({
@@ -165,6 +165,6 @@ async function main() {
 
 main().catch((error) => {
   // Last resort: say something rather than leave the pane empty.
-  console.log(`claude-hud: ${error?.message ?? error}`);
+  console.log(`readout: ${error?.message ?? error}`);
   process.exitCode = 0;
 });

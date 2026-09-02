@@ -1,7 +1,7 @@
 /**
  * Config and XDG paths.
  *
- * The HUD works with no config file at all; `~/.config/claude-hud/config.json`
+ * The HUD works with no config file at all; `~/.config/claude-readout/config.json`
  * only ever overrides defaults. A malformed config must never take the
  * statusline down, so parse failures fall back to defaults silently (the
  * reason is available via `--doctor`).
@@ -22,11 +22,11 @@ export function cacheHome(env = process.env) {
 }
 
 export function configPath(env = process.env) {
-  return env.CLAUDE_HUD_CONFIG?.trim() || join(configHome(env), "claude-hud", "config.json");
+  return env.READOUT_CONFIG?.trim() || join(configHome(env), "claude-readout", "config.json");
 }
 
 export function cacheDir(env = process.env) {
-  return join(cacheHome(env), "claude-hud");
+  return join(cacheHome(env), "claude-readout");
 }
 
 export function ensureCacheDir(env = process.env) {

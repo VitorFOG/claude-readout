@@ -5,7 +5,7 @@
 # does not source the profile that puts nvm/fnm/volta's node on PATH. This finds
 # a usable node and execs the HUD with it.
 #
-# Order: $CLAUDE_HUD_NODE, PATH, nvm, fnm, volta/asdf/nodenv, system paths.
+# Order: $READOUT_NODE, PATH, nvm, fnm, volta/asdf/nodenv, system paths.
 # Exits 0 on failure so a missing node never blocks Claude Code.
 
 case "$0" in
@@ -13,12 +13,17 @@ case "$0" in
   *) SCRIPT_DIR=. ;;
 esac
 SCRIPT_DIR=$(cd "$SCRIPT_DIR" 2>/dev/null && pwd -P) || SCRIPT_DIR=.
-HUD="$SCRIPT_DIR/claude-hud.mjs"
+ENTRY="$SCRIPT_DIR/claude-readout.mjs"
+
+if [ ! -f "$ENTRY" ]; then
+  printf 'claude-readout: entry point missing at %s\n' "$ENTRY"
+  exit 0
+fi
 
 NODE_BIN=""
 
-if [ -n "${CLAUDE_HUD_NODE:-}" ] && [ -x "${CLAUDE_HUD_NODE}" ]; then
-  NODE_BIN=$CLAUDE_HUD_NODE
+if [ -n "${READOUT_NODE:-}" ] && [ -x "${READOUT_NODE}" ]; then
+  NODE_BIN=$READOUT_NODE
 fi
 
 if [ -z "$NODE_BIN" ]; then
@@ -51,8 +56,8 @@ if [ -z "$NODE_BIN" ]; then
 fi
 
 if [ -z "$NODE_BIN" ]; then
-  printf 'claude-hud: no node found (set CLAUDE_HUD_NODE to an absolute path)\n'
+  printf 'readout: no node found (set READOUT_NODE to an absolute path)\n'
   exit 0
 fi
 
-exec "$NODE_BIN" "$HUD" "$@"
+exec "$NODE_BIN" "$ENTRY" "$@"

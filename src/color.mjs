@@ -23,7 +23,7 @@ export function colorEnabled() {
 /** Detect colour support from the environment, honouring the NO_COLOR standard. */
 export function detectColorSupport(env = process.env) {
   if (env.NO_COLOR !== undefined && env.NO_COLOR !== "") return false;
-  if (env.CLAUDE_HUD_NO_COLOR === "1") return false;
+  if (env.READOUT_NO_COLOR === "1") return false;
   const term = env.TERM ?? "";
   if (term === "dumb") return false;
   return true;
