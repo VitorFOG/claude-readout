@@ -1,3 +1,6 @@
 node_modules/
+dist/
+/claude-readout
+/claude-readout.exe
 *.log
 .DS_Store
