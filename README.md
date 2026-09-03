@@ -6,6 +6,8 @@ one line. Inspired by the HUD in [oh-my-claudecode](https://github.com/Yeachan-H
 
 ![claude-readout under a Claude Code prompt: branch, model, 5-hour and weekly meters, the Fable quota, context, effort, session time and tool calls](docs/readout.png)
 
+![The same line up close](docs/readout-close.png)
+
 - **Per-model weekly quotas.** Fable, and any tier Anthropic adds later, each with its own meter.
 - **One static binary.** Written in Go. A frame renders in a few milliseconds and never touches the network.
 - **Continuous meter colour.** Bars interpolate along a ramp, so 54% and 56% look like neighbours.
