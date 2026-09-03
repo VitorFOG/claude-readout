@@ -1,17 +1,27 @@
 {
   "name": "claude-readout",
-  "version": "0.1.0",
-  "description": "A Nerd Font statusline for Claude Code \u2014 model, rate limits, per-model weekly quotas, context and git, in truecolor.",
-  "type": "module",
+  "version": "0.2.0",
+  "description": "A Nerd Font statusline for Claude Code — model, rate limits, per-model weekly quotas, context and git, in truecolor. Ships as a native binary.",
   "bin": {
-    "claude-readout": "bin/claude-readout.mjs"
+    "claude-readout": "npm/bin/claude-readout"
   },
   "files": [
-    "bin",
-    "src",
+    "npm",
     "README.md",
     "LICENSE"
   ],
+  "scripts": {
+    "test": "go test ./... && node scripts/build-npm.mjs --check",
+    "prepublishOnly": "node -e \"if (!process.env.CLAUDE_READOUT_PUBLISH) { console.error('publish through: node scripts/build-npm.mjs --publish'); process.exit(1); }\""
+  },
+  "optionalDependencies": {
+    "claude-readout-darwin-arm64": "0.2.0",
+    "claude-readout-darwin-x64": "0.2.0",
+    "claude-readout-linux-arm64": "0.2.0",
+    "claude-readout-linux-x64": "0.2.0",
+    "claude-readout-win32-arm64": "0.2.0",
+    "claude-readout-win32-x64": "0.2.0"
+  },
   "engines": {
     "node": ">=18"
   },
@@ -32,9 +42,5 @@
   "homepage": "https://github.com/VitorFOG/claude-readout#readme",
   "bugs": {
     "url": "https://github.com/VitorFOG/claude-readout/issues"
-  },
-  "scripts": {
-    "test": "node --test",
-    "prepublishOnly": "node --test"
   }
 }

@@ -45,6 +45,7 @@ func panicMessage(r any) string {
 //	                               meaning; doubles as a font check
 //	--ramp                         print the meter ramp at 5% steps
 //	--doctor                       binary and config paths, token, cache age, colour
+//	--setup                        point Claude Code's settings at this binary
 //	--no-color                     force colour off
 func run(args []string, stdin io.Reader, stdout io.Writer, env Env, getenv func(string) string, now time.Time) {
 	hasFlag := func(flag string) bool {
@@ -72,6 +73,10 @@ func run(args []string, stdin io.Reader, stdout io.Writer, env Env, getenv func(
 	}
 	if hasFlag("--doctor") {
 		printDoctor(stdout, loaded, env, getenv, now)
+		return
+	}
+	if hasFlag("--setup") {
+		runSetup(stdout, env)
 		return
 	}
 

@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+"use strict";
+
+// The `claude-readout` command npm puts on PATH. It hands off to the platform
+// binary. Claude Code should not go through here on every frame: run
+// `claude-readout --setup` once and the statusline is pointed straight at the
+// binary, with no Node in the loop.
+const { spawnSync } = require("child_process");
+const { binaryPath, packageName } = require("../platform");
+
+const binary = binaryPath();
+if (!binary) {
+  console.log(`claude-readout: ${packageName} is not installed (unsupported platform, or npm ran with --no-optional)`);
+  process.exit(0);
+}
+
+const result = spawnSync(binary, process.argv.slice(2), { stdio: "inherit" });
+if (result.error) {
+  console.log(`claude-readout: cannot run ${binary} (${result.error.code ?? result.error.message})`);
+  process.exit(0);
+}
+process.exit(result.status ?? 0);
