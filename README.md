@@ -49,20 +49,21 @@ Code at the binary that ran it.
 
 ## Elements
 
-| Glyph | Element | Source |
+| Element | Shows | Source |
 | --- | --- | --- |
-| 󰚩 | Model, with `1M` for the long-context variant | stdin |
-|  | 5-hour window, time to reset | stdin |
-|  | Weekly window, time to reset | stdin |
-| *(name)* | Per-model weekly quota, printed as the model name | usage API |
-| 󰍛 | Context window used | stdin |
-| 󰧑 | Extended thinking, effort level | stdin |
-| 󰔟 | Session duration | stdin |
-|  | Tool calls this session | transcript |
-|  | Branch and working-tree counts | `git` |
+| `model` | Model, with `1M` for the long-context variant | stdin |
+| `fiveHour` | 5-hour window, time to reset | stdin |
+| `weekly` | Weekly window, time to reset | stdin |
+| `scoped` | Per-model weekly quota, printed as the model name | usage API |
+| `context` | Context window used | stdin |
+| `thinking` | Extended thinking, effort level | stdin |
+| `session` | Session duration | stdin |
+| `tools` | Tool calls this session | transcript |
+| `cost` | Session spend in USD, off by default | stdin |
+| `branch`, `gitStatus`, `repo` | Branch, working-tree counts, repository name (`repo` off by default) | `git` |
 
 Everything except the per-model quota comes from the JSON Claude Code hands the statusline on
-stdin.
+stdin. `claude-readout --legend` prints each element with its glyph.
 
 ## Configuration
 
@@ -81,14 +82,13 @@ is an override.
       { "at": 80, "color": "#e0af68" },
       { "at": 100, "color": "#f7768e" }
     ]
-  },
-  "glyphs": { "model": "󰠮", "tools": "" }
+  }
 }
 ```
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `elements` | `cost` and `repo` off, the rest on | Hide any of `model`, `fiveHour`, `weekly`, `scoped`, `context`, `session`, `thinking`, `tools`, `cost`, `repo`, `branch`, `gitStatus` with `false`. |
+| `elements` | `cost` and `repo` off, the rest on | Any element from the table above, `true` or `false`. |
 | `palette.bar` | green to 55%, amber at 80%, red at 100% | A ramp of `{ "at", "color" }` stops; the colour interpolates between them. A plain array of hex strings spreads evenly over 0 to 100. |
 | `palette.accent`, `muted`, `text`, `scoped`, `barEmpty`, `ok`, `warn`, `crit` | Tokyo Night | The other colours, as `#rrggbb`. |
 | `glyphs` | Nerd Font set | `"text"` for plain labels, or an object overriding single glyphs. |
