@@ -14,7 +14,8 @@ on one line.
 - **Per-model weekly quotas.** Fable, and any tier Anthropic adds later, each with its own
   meter. These are not in the payload Claude Code hands the statusline, so showing them takes a
   call to the usage API — see [how it works](#how-the-per-model-quota-works).
-- **No dependencies.** Pure Node. Nothing to install but the files.
+- **One static binary.** Written in Go, no runtime, nothing to have on `PATH`. A frame renders
+  in a few milliseconds.
 - **Never blocks your prompt.** The render path does no network I/O at all; the usage snapshot
   refreshes in a detached process for the next frame.
 - **Continuous meter colour.** Bars interpolate along a ramp instead of snapping between three
@@ -24,50 +25,46 @@ on one line.
 
 ```sh
 npm install -g claude-readout
+claude-readout --setup
 ```
 
-Then point Claude Code at it in `~/.claude/settings.json`:
+`--setup` writes the binary's absolute path into `statusLine` in `~/.claude/settings.json`
+(or `$CLAUDE_CONFIG_DIR/settings.json`), keeping everything else in the file. Restart Claude
+Code and the line appears.
+
+The absolute path is the point: Claude Code runs the statusline through a non-interactive
+shell that does not source the profile putting nvm, fnm or volta on `PATH`, and going through
+npm's launcher would put a Node startup in front of every frame. Prefer to edit the file
+yourself? `claude-readout --doctor` prints the path to use:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "claude-readout"
+    "command": "/absolute/path/to/claude-readout"
   }
 }
 ```
-
-Claude Code runs the statusline through a *non-interactive* shell, which does not source the
-profile that puts nvm/fnm/volta on `PATH`. If the bare name doesn't resolve, use the absolute
-path that `which claude-readout` prints.
 
 <details>
-<summary>From a clone instead</summary>
+<summary>Without npm</summary>
+
+With Go 1.26 or newer:
 
 ```sh
-git clone https://github.com/VitorFOG/claude-readout ~/.local/src/claude-readout
+go install github.com/VitorFOG/claude-readout@latest
+claude-readout --setup
 ```
 
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "sh ~/.local/src/claude-readout/bin/claude-readout.sh"
-  }
-}
-```
-
-`claude-readout.sh` is a launcher that finds node on its own — nvm, fnm, volta, asdf, nodenv,
-Homebrew and system paths — so it works with nothing on `PATH`. Override its search with
-`READOUT_NODE`.
+Or from a clone, `go build` and run `./claude-readout --setup`; the command points Claude
+Code at whichever binary ran it.
 
 </details>
 
-Requires Node 18+ and a [Nerd Font](https://www.nerdfonts.com/) in your terminal. Check the
-glyphs render:
+Requires a [Nerd Font](https://www.nerdfonts.com/) in your terminal. Check the glyphs render:
 
 ```sh
-node bin/claude-readout.mjs --legend
+claude-readout --legend
 ```
 
 Any box or blank means your font lacks that glyph — override it in the config, or switch the
@@ -158,11 +155,11 @@ meters are the last thing standing.
 
 `reserveColumns` (default 2) holds cells back for the pane's border. Width comes from the
 `COLUMNS` environment variable, which is the only signal available — Claude Code pipes the
-statusline's stdout, so `process.stdout.columns` is undefined and `/dev/tty` is unreachable.
-Override it with `READOUT_COLUMNS` for testing:
+statusline's stdout, so there is no terminal to ask. Override it with `READOUT_COLUMNS` for
+testing:
 
 ```sh
-COLUMNS=80 node bin/claude-readout.mjs < test/fixture-session.json
+COLUMNS=80 claude-readout < testdata/fixture-session.json
 ```
 
 **Other keys.** `usageApi: false` skips the usage request entirely — you keep the 5-hour and
@@ -193,29 +190,36 @@ until Claude Code renews it.
 ## Troubleshooting
 
 ```sh
-node bin/claude-readout.mjs --doctor    # config path, token, cache age, colour support
-node bin/claude-readout.mjs --legend    # what each element means, and a font check
-node bin/claude-readout.mjs --refresh-usage   # force a usage fetch now
+claude-readout --doctor          # binary path, config path, token, cache age, colour support
+claude-readout --legend          # what each element means, and a font check
+claude-readout --refresh-usage   # force a usage fetch now
 ```
 
 Render it by hand against a captured payload:
 
 ```sh
-node bin/claude-readout.mjs < test/fixture-session.json
+claude-readout < testdata/fixture-session.json
 ```
-
-A render takes about 60ms, roughly 20ms of which is Node's own startup.
 
 ## Development
 
 ```sh
-npm test    # node --test, no dependencies
+go test ./...              # unit tests and a CLI smoke test against the built binary
+scripts/equivalence.sh     # diff the binary against the Node version it replaced
+node scripts/build-npm.mjs # cross-compile every platform package into dist/npm
+scripts/install-smoke.sh   # install those packages into a throwaway prefix and run them
 ```
 
-CI runs the suite on Node 18/20/22, Linux and macOS.
+The Go code is a port of the original Node implementation. `scripts/equivalence.sh` checks that
+implementation out of git history and diffs the two byte for byte over a matrix of payloads,
+configs, terminal widths, git states and flags, so the port's claim stays testable after the
+JavaScript is gone. CI runs it, the tests on Linux and macOS, and the install smoke test.
+
+Releasing is a tag: `v<version>` matching `package.json` builds the six platform packages and
+publishes them with the root package.
 
 The statusline contract is: read JSON on stdin, print to stdout, **always exit 0**. A statusline
-that throws leaves an empty pane, so every I/O path here degrades to "show less" rather than
+that fails leaves an empty pane, so every I/O path here degrades to "show less" rather than
 failing.
 
 ## Acknowledgements
