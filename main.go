@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -44,8 +45,8 @@ func panicMessage(r any) string {
 //	--legend | --glyphs            print every element with its glyph and
 //	                               meaning; doubles as a font check
 //	--ramp                         print the meter ramp at 5% steps
-//	--doctor                       binary and config paths, token, cache age, colour
-//	--setup                        point Claude Code's settings at this binary
+//	--doctor                       binary and config paths, font, token, cache age, colour
+//	--setup                        configure Claude Code and ensure a Nerd Font exists
 //	--no-color                     force colour off
 func run(args []string, stdin io.Reader, stdout io.Writer, env Env, getenv func(string) string, now time.Time) {
 	hasFlag := func(flag string) bool {
@@ -72,11 +73,11 @@ func run(args []string, stdin io.Reader, stdout io.Writer, env Env, getenv func(
 		return
 	}
 	if hasFlag("--doctor") {
-		printDoctor(stdout, loaded, env, getenv, now)
+		printDoctor(stdout, loaded, env, getenv, now, fontLocations(runtime.GOOS, env.Home, getenv))
 		return
 	}
 	if hasFlag("--setup") {
-		runSetup(stdout, env)
+		runSetup(stdout, env, fontLocations(runtime.GOOS, env.Home, getenv), fetchNerdFont)
 		return
 	}
 
@@ -216,13 +217,18 @@ func executablePath() string {
 
 // printDoctor reports where the binary, config, token and usage cache are, and
 // whether colour is on, for the "why is my line blank" questions.
-func printDoctor(w io.Writer, loaded LoadedConfig, env Env, getenv func(string) string, now time.Time) {
+func printDoctor(w io.Writer, loaded LoadedConfig, env Env, getenv func(string) string, now time.Time, fonts FontLocations) {
 	_, _ = fmt.Fprintf(w, "binary:      %s\n", executablePath())
 	invalid := ""
 	if loaded.Err != nil {
 		invalid = "  (INVALID: " + loaded.Err.Error() + ")"
 	}
 	_, _ = fmt.Fprintf(w, "config:      %s%s\n", loaded.Path, invalid)
+	if path, ok := findNerdFont(fonts.Dirs); ok {
+		_, _ = fmt.Fprintf(w, "nerd font:   %s\n", path)
+	} else {
+		_, _ = io.WriteString(w, "nerd font:   not found (run --setup)\n")
+	}
 	if _, ok := readAccessToken(env, now); ok {
 		_, _ = io.WriteString(w, "oauth token: found\n")
 	} else {

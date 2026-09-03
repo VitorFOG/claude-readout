@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -32,12 +33,25 @@ func TestMain(m *testing.M) {
 func runCLI(t *testing.T, input string, args ...string) string {
 	t.Helper()
 	root := t.TempDir()
+	fontDir := fontLocations(runtime.GOOS, root, func(key string) string {
+		if key == "XDG_DATA_HOME" {
+			return filepath.Join(root, "data")
+		}
+		return ""
+	}).UserDir
+	if err := os.MkdirAll(fontDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fontDir, "TestNerdFont-Regular.ttf"), []byte("font"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	cmd := exec.Command(cliBinary, args...)
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Env = []string{
 		"HOME=" + root,
 		"XDG_CONFIG_HOME=" + filepath.Join(root, "config"),
 		"XDG_CACHE_HOME=" + filepath.Join(root, "cache"),
+		"XDG_DATA_HOME=" + filepath.Join(root, "data"),
 		"CLAUDE_CONFIG_DIR=" + filepath.Join(root, "claude"),
 		"NO_COLOR=1",
 		"PATH=" + os.Getenv("PATH"),
@@ -82,7 +96,7 @@ func TestCLIRamp(t *testing.T) {
 }
 
 func TestCLIDoctor(t *testing.T) {
-	if out := runCLI(t, "", "--doctor"); !strings.Contains(out, "oauth token:") {
+	if out := runCLI(t, "", "--doctor"); !strings.Contains(out, "oauth token:") || !strings.Contains(out, "nerd font:   ") || strings.Contains(out, "nerd font:   not found") {
 		t.Fatalf("doctor output: %q", out)
 	}
 }

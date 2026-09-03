@@ -151,10 +151,10 @@ for impl in ref cand; do
     done
     run_case "ramp-${cfg%.json}" "$impl" "" "$cfg" "" "" --ramp
     run_case "doctor-${cfg%.json}" "$impl" "" "$cfg" "" "" --doctor
-    # The Go --doctor adds a "binary:" line the Node version never had, the cache
-    # age counts seconds between the two runs, and the two JSON parsers word a
-    # syntax error differently.
-    sed -i -e '/^binary: /d' -e 's/[0-9]*s old$/Ns old/' -e 's/(INVALID: .*)$/(INVALID)/' "$WORK/out/$impl/doctor-${cfg%.json}"
+    # The Go --doctor adds "binary:" and "nerd font:" lines the Node version
+    # never had, the cache age counts seconds between the two runs, and the two
+    # JSON parsers word a syntax error differently.
+    sed -i -e '/^binary: /d' -e '/^nerd font: /d' -e 's/[0-9]*s old$/Ns old/' -e 's/(INVALID: .*)$/(INVALID)/' "$WORK/out/$impl/doctor-${cfg%.json}"
   done
   for payload in detached.json fresh.json plain.json empty-object.json empty.json garbage.json null.json minimal.json edges.json past-reset.json; do
     for cols in "" 60; do
