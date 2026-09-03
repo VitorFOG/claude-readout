@@ -6,8 +6,11 @@ one line. Inspired by the HUD in [oh-my-claudecode](https://github.com/Yeachan-H
 
 ![claude-readout under a Claude Code prompt: branch, model, 5-hour and weekly meters, the Fable quota, context, effort, session time and tool calls](docs/readout.png)
 
+![The same line up close](docs/readout-close.png)
+
 - **Per-model weekly quotas.** Fable, and any tier Anthropic adds later, each with its own meter.
-- **One static binary.** Written in Go. A frame renders in a few milliseconds and never touches the network.
+- **One static binary.** Written in Go. A frame renders in a few milliseconds and never
+  touches the network. Only `--setup` and `--refresh-usage` go online.
 - **Continuous meter colour.** Bars interpolate along a ramp, so 54% and 56% look like neighbours.
 
 ## Install
@@ -28,7 +31,11 @@ fnm or volta on `PATH`. To edit the file yourself, use the path `claude-readout 
 { "statusLine": { "type": "command", "command": "/absolute/path/to/claude-readout" } }
 ```
 
-You need a [Nerd Font](https://www.nerdfonts.com/) in the terminal. Check it with
+`--setup` also looks for a [Nerd Font](https://www.nerdfonts.com/) in the platform font
+directories. When none is found it downloads Symbols Nerd Font Mono from the nerd-fonts GitHub
+release into the user font directory, on macOS and Linux. On Windows it prints the link and the
+directory instead. That font holds only the icons, and terminals fall back to it for glyphs the
+main font lacks, so the terminal font does not have to change. Check the icons with
 `claude-readout --legend`. A box or a blank means the font lacks that glyph. Override single
 glyphs in the config, or set `"glyphs": "text"` for plain labels.
 
@@ -127,7 +134,7 @@ Claude Code renews it.
 ## Troubleshooting
 
 ```sh
-claude-readout --doctor          # binary path, config path, token, cache age, colour support
+claude-readout --doctor          # binary, config and font paths, token, cache age, colour support
 claude-readout --legend          # what each element means, and a font check
 claude-readout --refresh-usage   # fetch usage now
 claude-readout < testdata/fixture-session.json   # render a captured payload by hand

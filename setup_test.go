@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -21,7 +23,7 @@ func TestSetupWritesStatusLineAndKeepsEverythingElse(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	runSetup(&out, Env{Home: dir, ClaudeConfigDir: dir})
+	runSetupForSettingsTest(t, &out, Env{Home: dir, ClaudeConfigDir: dir})
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -53,7 +55,7 @@ func TestSetupWritesStatusLineAndKeepsEverythingElse(t *testing.T) {
 	}
 
 	out.Reset()
-	runSetup(&out, Env{Home: dir, ClaudeConfigDir: dir})
+	runSetupForSettingsTest(t, &out, Env{Home: dir, ClaudeConfigDir: dir})
 	if !strings.Contains(out.String(), "already points at") {
 		t.Errorf("second run should be a no-op, got: %s", out.String())
 	}
@@ -68,7 +70,7 @@ func TestSetupKeepsFileMode(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runSetup(&bytes.Buffer{}, Env{Home: dir, ClaudeConfigDir: dir})
+	runSetupForSettingsTest(t, &bytes.Buffer{}, Env{Home: dir, ClaudeConfigDir: dir})
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +83,7 @@ func TestSetupKeepsFileMode(t *testing.T) {
 func TestSetupCreatesMissingSettings(t *testing.T) {
 	dir := t.TempDir()
 	var out bytes.Buffer
-	runSetup(&out, Env{Home: dir, ClaudeConfigDir: filepath.Join(dir, "claude")})
+	runSetupForSettingsTest(t, &out, Env{Home: dir, ClaudeConfigDir: filepath.Join(dir, "claude")})
 	data, err := os.ReadFile(filepath.Join(dir, "claude", "settings.json"))
 	if err != nil {
 		t.Fatalf("settings.json not created: %v", err)
@@ -99,7 +101,7 @@ func TestSetupRefusesMalformedSettings(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out bytes.Buffer
-		runSetup(&out, Env{Home: dir, ClaudeConfigDir: dir})
+		runSetupForSettingsTest(t, &out, Env{Home: dir, ClaudeConfigDir: dir})
 		after, _ := os.ReadFile(path)
 		if string(after) != content {
 			t.Errorf("%s: malformed file was modified: %s", name, after)
@@ -144,7 +146,7 @@ func TestSetupFollowsSymlinkedSettings(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
-	runSetup(&bytes.Buffer{}, Env{Home: dir, ClaudeConfigDir: dir})
+	runSetupForSettingsTest(t, &bytes.Buffer{}, Env{Home: dir, ClaudeConfigDir: dir})
 	if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("settings.json is no longer a symlink: %v %v", info, err)
 	}
@@ -155,4 +157,86 @@ func TestSetupFollowsSymlinkedSettings(t *testing.T) {
 	if !strings.Contains(string(data), `"statusLine"`) || !strings.Contains(string(data), `"theme": "dark"`) {
 		t.Errorf("symlink target not updated in place: %s", data)
 	}
+}
+
+func TestSetupInstallsMissingNerdFontThenFindsIt(t *testing.T) {
+	t.Setenv("PATH", "")
+	root := t.TempDir()
+	fontDir := filepath.Join(root, "fonts")
+	locations := FontLocations{UserDir: fontDir, Dirs: []string{fontDir}, CanInstall: true}
+	archive := zipFixture(t, []zipEntry{{name: "SymbolsNerdFontMono-Regular.ttf", contents: "font"}})
+	fetchCalls := 0
+	fetch := func(url string) (io.ReadCloser, error) {
+		fetchCalls++
+		return io.NopCloser(bytes.NewReader(archive)), nil
+	}
+	var out bytes.Buffer
+
+	runSetup(&out, Env{Home: root, ClaudeConfigDir: filepath.Join(root, "claude")}, locations, fetch)
+
+	installed := filepath.Join(fontDir, "SymbolsNerdFontMono-Regular.ttf")
+	if fetchCalls != 1 {
+		t.Fatalf("fetch calls = %d, want 1", fetchCalls)
+	}
+	if data, err := os.ReadFile(installed); err != nil || string(data) != "font" {
+		t.Fatalf("installed font = %q, %v, want font contents", data, err)
+	}
+	for _, want := range []string{
+		"claude-readout: no Nerd Font in " + fontDir,
+		"claude-readout: installing Symbols Nerd Font Mono into " + fontDir,
+		"claude-readout: installed " + installed,
+		"Restart your terminal if the glyphs still show as boxes; claude-readout --legend prints them all.",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("setup output missing %q:\n%s", want, out.String())
+		}
+	}
+
+	out.Reset()
+	runSetup(&out, Env{Home: root, ClaudeConfigDir: filepath.Join(root, "claude")}, locations, func(string) (io.ReadCloser, error) {
+		t.Fatal("fetch called when a Nerd Font was already installed")
+		return nil, errors.New("unreachable")
+	})
+	if !strings.Contains(out.String(), "claude-readout: nerd font: "+installed) {
+		t.Fatalf("second setup did not find installed font:\n%s", out.String())
+	}
+}
+
+func TestSetupMalformedSettingsStillRunsFontStep(t *testing.T) {
+	t.Setenv("PATH", "")
+	root := t.TempDir()
+	settings := filepath.Join(root, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{"theme": `), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fontDir := filepath.Join(root, "fonts")
+	archive := zipFixture(t, []zipEntry{{name: "SymbolsNerdFontMono-Regular.ttf", contents: "font"}})
+	var out bytes.Buffer
+
+	runSetup(
+		&out,
+		Env{Home: root, ClaudeConfigDir: root},
+		FontLocations{UserDir: fontDir, Dirs: []string{fontDir}, CanInstall: true},
+		func(string) (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(archive)), nil },
+	)
+
+	if !strings.Contains(out.String(), "not touching") || !strings.Contains(out.String(), "claude-readout: installed ") {
+		t.Fatalf("setup did not report both malformed settings and font installation:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(fontDir, "SymbolsNerdFontMono-Regular.ttf")); err != nil {
+		t.Fatalf("font step did not run: %v", err)
+	}
+}
+
+func runSetupForSettingsTest(t *testing.T, w io.Writer, env Env) {
+	t.Helper()
+	fontDir := t.TempDir()
+	font := filepath.Join(fontDir, "TestNerdFont-Regular.ttf")
+	if err := os.WriteFile(font, []byte("font"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runSetup(w, env, FontLocations{UserDir: fontDir, Dirs: []string{fontDir}, CanInstall: true}, func(string) (io.ReadCloser, error) {
+		t.Fatal("fetch called with a Nerd Font present")
+		return nil, errors.New("unreachable")
+	})
 }

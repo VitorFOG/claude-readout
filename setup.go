@@ -12,7 +12,14 @@ import (
 	"strings"
 )
 
-// runSetup points Claude Code's statusline at this binary by writing
+// runSetup points Claude Code's statusline at this binary and ensures a Nerd
+// Font is available. Nothing here exits non-zero.
+func runSetup(w io.Writer, env Env, fonts FontLocations, fetch func(url string) (io.ReadCloser, error)) {
+	setupSettings(w, env)
+	setupFont(w, fonts, fetch)
+}
+
+// setupSettings points Claude Code's statusline at this binary by writing
 //
 //	"statusLine": {"type": "command", "command": "<absolute path of this binary>"}
 //
@@ -24,8 +31,8 @@ import (
 // through npm's JS launcher would put a Node startup in front of every frame.
 //
 // A settings file that is not a JSON object is left alone and the snippet is
-// printed for the user to apply by hand. Nothing here exits non-zero.
-func runSetup(w io.Writer, env Env) {
+// printed for the user to apply by hand.
+func setupSettings(w io.Writer, env Env) {
 	self := executablePath()
 	if self == "" {
 		fmt.Fprintln(w, "claude-readout: cannot find my own path")
@@ -67,6 +74,35 @@ func runSetup(w io.Writer, env Env) {
 		return
 	}
 	fmt.Fprintf(w, "claude-readout: statusLine in %s now runs %s\nRestart Claude Code to see it.\n", path, command)
+}
+
+func setupFont(w io.Writer, fonts FontLocations, fetch func(url string) (io.ReadCloser, error)) {
+	if path, ok := findNerdFont(fonts.Dirs); ok {
+		fmt.Fprintf(w, "claude-readout: nerd font: %s\n", path)
+		return
+	}
+
+	fmt.Fprintf(w, "claude-readout: no Nerd Font in %s\n", strings.Join(fonts.Dirs, ", "))
+	if !fonts.CanInstall {
+		printManualFontInstall(w, fonts.UserDir)
+		return
+	}
+
+	fmt.Fprintf(w, "claude-readout: installing Symbols Nerd Font Mono into %s (from github.com/ryanoasis/nerd-fonts)\n", fonts.UserDir)
+	installed, err := installNerdFont(fonts.UserDir, fetch)
+	if err != nil {
+		fmt.Fprintf(w, "claude-readout: could not install the font (%v)\n", err)
+		printManualFontInstall(w, fonts.UserDir)
+		return
+	}
+	for _, path := range installed {
+		fmt.Fprintf(w, "claude-readout: installed %s\n", path)
+	}
+	fmt.Fprintln(w, "Restart your terminal if the glyphs still show as boxes; claude-readout --legend prints them all.")
+}
+
+func printManualFontInstall(w io.Writer, dir string) {
+	fmt.Fprintf(w, "claude-readout: download %s and unpack its .ttf files into %s\n", nerdFontURL, dir)
 }
 
 // shellQuote makes the path safe for the shell Claude Code hands the
