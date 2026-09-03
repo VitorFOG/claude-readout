@@ -1,25 +1,14 @@
 # claude-readout
 
-> *readout* — the display face of a measuring instrument.
+A Nerd Font statusline for [Claude Code](https://claude.com/claude-code): model, rate-limit
+meters, per-model weekly quotas, context, session time, tool calls and git, in truecolor, on
+one line. Inspired by the HUD in [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode).
 
-A Nerd Font statusline for [Claude Code](https://claude.com/claude-code). Model, rate-limit
-meters, per-model weekly quotas, context usage, session time, tool calls and git — in truecolor,
-on one line.
+![claude-readout under a Claude Code prompt: branch, model, 5-hour and weekly meters, the Fable quota, context, effort, session time and tool calls](docs/readout.png)
 
-```
-  feat/payments-api  !12 ?4
-󰚩 Opus 5 1M │  5h ███░░░░░ 38% (3h55m) │  wk █░░░░░░░ 14% (3d1h) │ Fable ██░░░░░░ 22% (3d1h) │ 󰍛 ██░░░░░░░░ 23% │ 󰧑 xhigh │ 󰔟 29m │  108
-```
-
-- **Per-model weekly quotas.** Fable, and any tier Anthropic adds later, each with its own
-  meter. These are not in the payload Claude Code hands the statusline, so showing them takes a
-  call to the usage API — see [how it works](#how-the-per-model-quota-works).
-- **One static binary.** Written in Go, no runtime, nothing to have on `PATH`. A frame renders
-  in a few milliseconds.
-- **Never blocks your prompt.** The render path does no network I/O at all; the usage snapshot
-  refreshes in a detached process for the next frame.
-- **Continuous meter colour.** Bars interpolate along a ramp instead of snapping between three
-  fixed colours, so neighbouring values look like neighbours.
+- **Per-model weekly quotas.** Fable, and any tier Anthropic adds later, each with its own meter.
+- **One static binary.** Written in Go. A frame renders in a few milliseconds and never touches the network.
+- **Continuous meter colour.** Bars interpolate along a ramp, so 54% and 56% look like neighbours.
 
 ## Install
 
@@ -28,23 +17,20 @@ npm install -g claude-readout
 claude-readout --setup
 ```
 
-`--setup` writes the binary's absolute path into `statusLine` in `~/.claude/settings.json`
-(or `$CLAUDE_CONFIG_DIR/settings.json`), keeping everything else in the file. Restart Claude
-Code and the line appears.
+Restart Claude Code. The line appears.
 
-The absolute path is the point: Claude Code runs the statusline through a non-interactive
-shell that does not source the profile putting nvm, fnm or volta on `PATH`, and going through
-npm's launcher would put a Node startup in front of every frame. Prefer to edit the file
-yourself? `claude-readout --doctor` prints the path to use:
+`--setup` writes the binary's absolute path into `statusLine` in `~/.claude/settings.json`,
+or `$CLAUDE_CONFIG_DIR/settings.json`, and leaves every other key alone. The path must be
+absolute because Claude Code runs the statusline through a non-interactive shell without nvm,
+fnm or volta on `PATH`. To edit the file yourself, use the path `claude-readout --doctor` prints:
 
 ```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "/absolute/path/to/claude-readout"
-  }
-}
+{ "statusLine": { "type": "command", "command": "/absolute/path/to/claude-readout" } }
 ```
+
+You need a [Nerd Font](https://www.nerdfonts.com/) in the terminal. Check it with
+`claude-readout --legend`. A box or a blank means the font lacks that glyph. Override single
+glyphs in the config, or set `"glyphs": "text"` for plain labels.
 
 <details>
 <summary>Without npm</summary>
@@ -56,57 +42,39 @@ go install github.com/VitorFOG/claude-readout@latest
 claude-readout --setup
 ```
 
-Or from a clone, `go build` and run `./claude-readout --setup`; the command points Claude
-Code at whichever binary ran it.
+Or `go build` in a clone and run `./claude-readout --setup`. Either way `--setup` points Claude
+Code at the binary that ran it.
 
 </details>
 
-Requires a [Nerd Font](https://www.nerdfonts.com/) in your terminal. Check the glyphs render:
-
-```sh
-claude-readout --legend
-```
-
-Any box or blank means your font lacks that glyph — override it in the config, or switch the
-whole set to plain text with `"glyphs": "text"`. The same table explains what every element
-means, which is as close to a tooltip as a terminal statusline gets.
-
-## What each element shows
+## Elements
 
 | Glyph | Element | Source |
 | --- | --- | --- |
-| 󰚩 | Model, with a `1M` marker for the long-context variant | stdin |
-|  | 5-hour usage window + time to reset | stdin |
-|  | Weekly usage window + time to reset | stdin |
-| *(name)* | Per-model weekly quota — printed as the model name, e.g. `Fable` | usage API |
+| 󰚩 | Model, with `1M` for the long-context variant | stdin |
+|  | 5-hour window, time to reset | stdin |
+|  | Weekly window, time to reset | stdin |
+| *(name)* | Per-model weekly quota, printed as the model name | usage API |
 | 󰍛 | Context window used | stdin |
-| 󰧑 | Extended thinking + effort level | stdin |
+| 󰧑 | Extended thinking, effort level | stdin |
 | 󰔟 | Session duration | stdin |
 |  | Tool calls this session | transcript |
-|  | Branch, with working-tree counts | `git` |
+|  | Branch and working-tree counts | `git` |
 
-Everything but the per-model quota comes straight from the JSON Claude Code hands the
-statusline on stdin, which is why it's cheap.
+Everything except the per-model quota comes from the JSON Claude Code hands the statusline on
+stdin.
 
 ## Configuration
 
-Optional, at `~/.config/claude-readout/config.json` (or `$READOUT_CONFIG`). Every key is an
-override — omit anything you don't care about.
+Optional. `~/.config/claude-readout/config.json`, or the file `$READOUT_CONFIG` names. Every key
+is an override.
 
 ```json
 {
   "barWidth": 8,
-  "contextBarWidth": 10,
-  "showGitLine": true,
-  "labels": "auto",
-  "elements": {
-    "cost": true,
-    "repo": true,
-    "tools": false
-  },
+  "elements": { "cost": true, "repo": true, "tools": false },
   "palette": {
     "accent": "#7aa2f7",
-    "scoped": "#bb9af7",
     "bar": [
       { "at": 0, "color": "#9ece6a" },
       { "at": 55, "color": "#9ece6a" },
@@ -118,87 +86,51 @@ override — omit anything you don't care about.
 }
 ```
 
-**Meter colour.** `palette.bar` is a ramp, not a set of thresholds. Stops carry an `at`
-percentage, and the colour interpolates between them — so a bar at 54% and one at 56% look
-related instead of snapping from green to yellow. The default holds green through 55%, warms to
-amber by 80%, and reaches red at 100%. A plain array of hex strings also works and is spread
-evenly across 0–100.
+| Key | Default | What it does |
+| --- | --- | --- |
+| `elements` | `cost` and `repo` off, the rest on | Hide any of `model`, `fiveHour`, `weekly`, `scoped`, `context`, `session`, `thinking`, `tools`, `cost`, `repo`, `branch`, `gitStatus` with `false`. |
+| `palette.bar` | green to 55%, amber at 80%, red at 100% | A ramp of `{ "at", "color" }` stops; the colour interpolates between them. A plain array of hex strings spreads evenly over 0 to 100. |
+| `palette.accent`, `muted`, `text`, `scoped`, `barEmpty`, `ok`, `warn`, `crit` | Tokyo Night | The other colours, as `#rrggbb`. |
+| `glyphs` | Nerd Font set | `"text"` for plain labels, or an object overriding single glyphs. |
+| `labels` | `"auto"` | `"auto"` names the quota meters (`5h`, `wk`, each model), which look alike side by side. `"always"` also names the context meter. `"never"` shows glyphs only. Model-scoped buckets always keep their name. |
+| `names` | `5h`, `wk`, `ctx` | Rename `fiveHour`, `weekly`, `context`. |
+| `barWidth`, `contextBarWidth` | 8, 10 | Meter widths in cells. |
+| `showGitLine` | `true` | The git line above the meters. |
+| `overflow` | `"shrink"` | What happens when the line is wider than the pane. See below. |
+| `reserveColumns` | 2 | Cells held back for the pane border. |
+| `separator` | `│` | Between elements. |
+| `usageApi` | `true` | `false` skips the usage request. You keep the 5-hour and weekly meters and lose the per-model ones. |
+| `usageTtlSeconds` | 120 | How old the usage snapshot may get before a refresh. |
 
-**Elements.** Set any of `model`, `fiveHour`, `weekly`, `scoped`, `context`, `session`,
-`thinking`, `tools`, `cost`, `repo`, `branch`, `gitStatus` to `false` to hide it (`cost` and
-`repo` are off by default).
+**Narrow panes.** The line shrinks in steps before anything is cut. Reset times go first, then
+bar width (8, 5, 3, none), then whole elements, least useful first. The quota meters are the
+last thing standing. `"overflow": "wrap"` continues onto more lines instead of dropping
+elements. `"none"` renders full width and lets Claude Code truncate. Width comes from `COLUMNS`,
+the only signal a piped statusline gets. `READOUT_COLUMNS` overrides it for testing.
 
-**Meter names.** `labels` controls whether a meter prints its name next to the glyph:
-
-| Value | Effect |
-| --- | --- |
-| `"auto"` *(default)* | Names the quota meters — `5h`, `wk`, and each model-scoped bucket. These sit side by side and look alike, so an icon alone can't tell them apart. |
-| `"always"` | Also names the context meter. |
-| `"never"` | Glyphs only. |
-
-Model-scoped buckets keep their model name under every setting: nothing else identifies which
-model a bar belongs to, and for the same reason they carry no icon — one would just repeat the
-name. Give them a glyph with `"glyphs": { "scoped": "" }` if you want one. Rename the built-ins
-with `"names": { "fiveHour": "5h", "weekly": "week", "context": "ctx" }`.
-
-**Narrow terminals.** The line adapts to the width Claude Code reports, shrinking on its own
-terms instead of being cut off mid-element with an ellipsis. It gives things up in this order:
-reset times, then bar width (8 → 5 → 3 → none, leaving bare percentages), and only then whole
-elements, least useful first — tool count, session, thinking, context, and so on, so the quota
-meters are the last thing standing.
-
-| `overflow` | Behaviour |
-| --- | --- |
-| `"shrink"` *(default)* | Compact, then give up elements. Stays on one line. |
-| `"wrap"` | Compact, then continue onto more lines. Nothing is lost. |
-| `"none"` | Render full width and let Claude Code truncate. |
-
-`reserveColumns` (default 2) holds cells back for the pane's border. Width comes from the
-`COLUMNS` environment variable, which is the only signal available — Claude Code pipes the
-statusline's stdout, so there is no terminal to ask. Override it with `READOUT_COLUMNS` for
-testing:
-
-```sh
-COLUMNS=80 claude-readout < testdata/fixture-session.json
-```
-
-**Other keys.** `usageApi: false` skips the usage request entirely — you keep the 5-hour and
-weekly meters from stdin and lose only the per-model buckets. `usageTtlSeconds` (default 120)
-controls how often that snapshot refreshes. `separator` overrides the `│` between elements.
-
-Colour follows the [`NO_COLOR`](https://no-color.org/) convention and can be forced off with
-`--no-color`.
+Colour follows [`NO_COLOR`](https://no-color.org/), and `--no-color` forces it off.
 
 ## How the per-model quota works
 
-Claude Code's stdin payload carries `rate_limits.five_hour` and `rate_limits.seven_day`, but not
-the per-model weekly buckets. Those come from `GET api.anthropic.com/api/oauth/usage`, read with
-the OAuth token Claude Code already stores (`~/.claude/.credentials.json`, or the login Keychain
-on macOS). The response's `limits[]` array is walked for `kind: "weekly_scoped"` entries, each
-labelled by `scope.model.display_name` — so a new model tier appears on its own, with no release
-here.
+Claude Code's payload carries the 5-hour and weekly windows but not the per-model buckets. Those
+come from `GET api.anthropic.com/api/oauth/usage`, read with the OAuth token Claude Code already
+stores in `~/.claude/.credentials.json`, or the login Keychain on macOS. Each `weekly_scoped`
+entry in the response becomes a meter labelled with its model name, so a new tier appears without
+a release here.
 
-That request never happens on the render path. `claude-readout` reads a cached snapshot from
-`~/.cache/claude-readout/usage.json` and, if it's older than the TTL, spawns a detached
-`--refresh-usage` process for the next frame. A cold cache costs you the per-model bars for one
-frame and nothing else.
-
-**It does not refresh the OAuth token.** That's Claude Code's job, and racing it risks
-invalidating the credentials your editor is using. An expired token just means no per-model bars
-until Claude Code renews it.
+The request never runs on the render path. Each frame reads a cached snapshot from
+`~/.cache/claude-readout/usage.json`. When it is older than `usageTtlSeconds`, a detached
+`--refresh-usage` process fetches a new one for the next frame. claude-readout never refreshes
+the token. That is Claude Code's job, and an expired token only means no per-model bars until
+Claude Code renews it.
 
 ## Troubleshooting
 
 ```sh
 claude-readout --doctor          # binary path, config path, token, cache age, colour support
 claude-readout --legend          # what each element means, and a font check
-claude-readout --refresh-usage   # force a usage fetch now
-```
-
-Render it by hand against a captured payload:
-
-```sh
-claude-readout < testdata/fixture-session.json
+claude-readout --refresh-usage   # fetch usage now
+claude-readout < testdata/fixture-session.json   # render a captured payload by hand
 ```
 
 ## Development
@@ -211,22 +143,12 @@ scripts/install-smoke.sh   # install those packages into a throwaway prefix and 
 ```
 
 The Go code is a port of the original Node implementation. `scripts/equivalence.sh` checks that
-implementation out of git history and diffs the two byte for byte over a matrix of payloads,
-configs, terminal widths, git states and flags, so the port's claim stays testable after the
-JavaScript is gone. CI runs it, the tests on Linux and macOS, and the install smoke test.
+implementation out of git history and diffs the two over a matrix of payloads, configs, widths,
+git states and flags. CI runs the tests, the harness and the install smoke on Linux and macOS.
+A `v<version>` tag matching `package.json` publishes the six platform packages and the root.
 
-Releasing is a tag: `v<version>` matching `package.json` builds the six platform packages and
-publishes them with the root package.
-
-The statusline contract is: read JSON on stdin, print to stdout, **always exit 0**. A statusline
-that fails leaves an empty pane, so every I/O path here degrades to "show less" rather than
-failing.
-
-## Acknowledgements
-
-The per-model weekly bucket handling was informed by the HUD in
-[oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) (MIT), which was the first
-statusline to surface those buckets generically.
+The statusline contract: read JSON on stdin, print to stdout, always exit 0. A statusline that
+fails leaves an empty pane, so every I/O path here shows less rather than failing.
 
 ## License
 
