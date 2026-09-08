@@ -21,6 +21,10 @@ type RenderInput struct {
 	Config  Config
 	Git     *GitInfo // nil outside a work tree or when the git line is off
 	Scoped  []Bucket // model-scoped weekly buckets from the usage cache
+	// FiveHour and Weekly are the usage snapshot's own windows, used only when
+	// the matching payload window is absent.
+	FiveHour *RateWindow
+	Weekly   *RateWindow
 	// ToolCalls is nil when the transcript is unavailable.
 	ToolCalls *int
 	// Columns is the terminal width when known, else 0.
@@ -203,19 +207,25 @@ func renderHud(in RenderInput) string {
 	}
 	if in.Config.element("fiveHour") {
 		descriptors = append(descriptors, descriptor{key: "fiveHour", render: func(level compactionLevel) string {
-			if in.Payload.RateLimits.FiveHour == nil {
+			window := in.Payload.RateLimits.FiveHour
+			if window == nil {
+				window = in.FiveHour
+			}
+			if window == nil {
 				return ""
 			}
-			window := in.Payload.RateLimits.FiveHour
 			return gauge(glyphs["fiveHour"], labelFor(in.Config.name("fiveHour"), true), window.UsedPercentage, window.ResetsAt, level.bar, "", level.showResets)
 		}})
 	}
 	if in.Config.element("weekly") {
 		descriptors = append(descriptors, descriptor{key: "weekly", render: func(level compactionLevel) string {
-			if in.Payload.RateLimits.SevenDay == nil {
+			window := in.Payload.RateLimits.SevenDay
+			if window == nil {
+				window = in.Weekly
+			}
+			if window == nil {
 				return ""
 			}
-			window := in.Payload.RateLimits.SevenDay
 			return gauge(glyphs["weekly"], labelFor(in.Config.name("weekly"), true), window.UsedPercentage, window.ResetsAt, level.bar, "", level.showResets)
 		}})
 	}

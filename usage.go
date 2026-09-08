@@ -47,9 +47,11 @@ type Bucket struct {
 
 // UsageCache is the on-disk snapshot. FetchedAt is epoch milliseconds.
 type UsageCache struct {
-	Scoped    []Bucket `json:"scoped"`
-	FetchedAt int64    `json:"fetchedAt"`
-	Error     string   `json:"error,omitempty"`
+	Scoped    []Bucket    `json:"scoped"`
+	FiveHour  *RateWindow `json:"fiveHour,omitempty"`
+	Weekly    *RateWindow `json:"weekly,omitempty"`
+	FetchedAt int64       `json:"fetchedAt"`
+	Error     string      `json:"error,omitempty"`
 }
 
 func (e Env) usageCachePath() string { return filepath.Join(e.cacheDir(), "usage.json") }
@@ -135,23 +137,23 @@ func isJSONNull(raw json.RawMessage) bool {
 	return strings.TrimSpace(string(raw)) == "null"
 }
 
-// parseScopedBuckets pulls kind == "weekly_scoped" entries out of the usage
-// response's limits[] array. Percent is rounded and clamped to 0..100; an entry
-// with a non-numeric percent or a blank scope.model.display_name is skipped.
-// Entries are de-duplicated by lower-cased display name, an active entry
-// replacing an inactive one. ID falls back to the lower-cased name. Order is
-// first appearance.
-func parseScopedBuckets(response []byte) []Bucket {
+// parseUsage pulls the rate windows and kind == "weekly_scoped" entries out of
+// the usage response's limits[] array. Percent is rounded and clamped to
+// 0..100; an entry with a non-numeric percent is skipped, as is a scoped entry
+// with a blank scope.model.display_name. Scoped entries are de-duplicated by
+// lower-cased display name, an active entry replacing an inactive one. ID falls
+// back to the lower-cased name. Scoped order is first appearance.
+func parseUsage(response []byte) UsageCache {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(response, &root); err != nil || root == nil {
-		return []Bucket{}
+		return UsageCache{Scoped: []Bucket{}}
 	}
 	var limits []json.RawMessage
 	if err := json.Unmarshal(root["limits"], &limits); err != nil {
-		return []Bucket{}
+		return UsageCache{Scoped: []Bucket{}}
 	}
 
-	buckets := make([]Bucket, 0)
+	usage := UsageCache{Scoped: make([]Bucket, 0)}
 	positions := make(map[string]int)
 	for _, raw := range limits {
 		var entry map[string]json.RawMessage
@@ -159,7 +161,7 @@ func parseScopedBuckets(response []byte) []Bucket {
 			continue
 		}
 		var kind string
-		if json.Unmarshal(entry["kind"], &kind) != nil || kind != "weekly_scoped" {
+		if json.Unmarshal(entry["kind"], &kind) != nil {
 			continue
 		}
 		var percentValue any
@@ -168,6 +170,21 @@ func parseScopedBuckets(response []byte) []Bucket {
 		}
 		percentNumber, ok := percentValue.(float64)
 		if !ok || math.IsNaN(percentNumber) || math.IsInf(percentNumber, 0) {
+			continue
+		}
+		percent := math.Max(0, math.Min(100, jsRound(percentNumber)))
+		if kind == "session" || kind == "weekly_all" {
+			var resetsAt Timestamp
+			_ = json.Unmarshal(entry["resets_at"], &resetsAt)
+			window := &RateWindow{UsedPercentage: &percent, ResetsAt: resetsAt}
+			if kind == "session" {
+				usage.FiveHour = window
+			} else {
+				usage.Weekly = window
+			}
+			continue
+		}
+		if kind != "weekly_scoped" {
 			continue
 		}
 
@@ -200,19 +217,19 @@ func parseScopedBuckets(response []byte) []Bucket {
 		bucket := Bucket{
 			ID:       id,
 			Label:    label,
-			Percent:  int(math.Max(0, math.Min(100, jsRound(percentNumber)))),
+			Percent:  int(percent),
 			ResetsAt: resetsAt,
 			Severity: severity,
 			IsActive: isActive,
 		}
 		if position, exists := positions[key]; !exists {
-			positions[key] = len(buckets)
-			buckets = append(buckets, bucket)
-		} else if isActive && !buckets[position].IsActive {
-			buckets[position] = bucket
+			positions[key] = len(usage.Scoped)
+			usage.Scoped = append(usage.Scoped, bucket)
+		} else if isActive && !usage.Scoped[position].IsActive {
+			usage.Scoped[position] = bucket
 		}
 	}
-	return buckets
+	return usage
 }
 
 // readCachedUsage returns the snapshot, or nil when missing or malformed
@@ -332,14 +349,18 @@ func refreshUsage(env Env, lockHeld bool, fetch func(token string) ([]byte, erro
 	if err != nil {
 		previous := readCachedUsage(env)
 		scoped := []Bucket{}
+		var fiveHour, weekly *RateWindow
 		if previous != nil {
 			scoped = previous.Scoped
+			fiveHour = previous.FiveHour
+			weekly = previous.Weekly
 		}
-		writeCache(UsageCache{Scoped: scoped, FetchedAt: now.UnixMilli(), Error: err.Error()})
+		writeCache(UsageCache{Scoped: scoped, FiveHour: fiveHour, Weekly: weekly, FetchedAt: now.UnixMilli(), Error: err.Error()})
 		return nil
 	}
 
-	cache := UsageCache{Scoped: parseScopedBuckets(body), FetchedAt: now.UnixMilli()}
+	cache := parseUsage(body)
+	cache.FetchedAt = now.UnixMilli()
 	writeCache(cache)
 	return &cache
 }

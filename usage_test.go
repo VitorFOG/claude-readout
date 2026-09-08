@@ -43,32 +43,47 @@ func readUsageJSON(t *testing.T, env Env) map[string]any {
 	return got
 }
 
-func TestParseScopedBucketsExtractsWeeklyEntries(t *testing.T) {
+func TestParseUsageExtractsWindowsAndScopedBuckets(t *testing.T) {
 	response := []byte(`{"limits":[
-		{"kind":"session","percent":36,"resets_at":"2026-09-02T22:00:00Z","scope":null},
-		{"kind":"weekly_all","percent":14,"resets_at":"2026-09-05T20:00:00Z","scope":null},
-		{"kind":"weekly_scoped","percent":22,"severity":"normal","resets_at":"2026-09-05T20:00:00Z","scope":{"model":{"id":null,"display_name":"Fable"}},"is_active":false}
+		{"kind":"session","group":"session","percent":16,"severity":"normal","resets_at":"2026-09-08T21:59:59.914703+00:00","scope":null,"is_active":true},
+		{"kind":"weekly_all","group":"weekly","percent":12,"severity":"normal","resets_at":"2026-09-12T19:59:59.914725+00:00","scope":null,"is_active":false},
+		{"kind":"weekly_scoped","group":"weekly","percent":13,"severity":"normal","resets_at":"2026-09-12T19:59:59.914725+00:00","scope":{"model":{"id":null,"display_name":"Fable"}},"is_active":false}
 	]}`)
 
-	buckets := parseScopedBuckets(response)
-	if len(buckets) != 1 {
-		t.Fatalf("got %d buckets, want 1", len(buckets))
+	usage := parseUsage(response)
+	if usage.FiveHour == nil || usage.FiveHour.UsedPercentage == nil || *usage.FiveHour.UsedPercentage != 16 || string(usage.FiveHour.ResetsAt.Raw) != `"2026-09-08T21:59:59.914703+00:00"` {
+		t.Fatalf("unexpected five-hour window: %#v", usage.FiveHour)
 	}
-	got := buckets[0]
-	if got.ID != "fable" || got.Label != "Fable" || got.Percent != 22 || got.Severity == nil || *got.Severity != "normal" {
+	if usage.Weekly == nil || usage.Weekly.UsedPercentage == nil || *usage.Weekly.UsedPercentage != 12 || string(usage.Weekly.ResetsAt.Raw) != `"2026-09-12T19:59:59.914725+00:00"` {
+		t.Fatalf("unexpected weekly window: %#v", usage.Weekly)
+	}
+	if len(usage.Scoped) != 1 {
+		t.Fatalf("got %d buckets, want 1", len(usage.Scoped))
+	}
+	got := usage.Scoped[0]
+	if got.ID != "fable" || got.Label != "Fable" || got.Percent != 13 || got.Severity == nil || *got.Severity != "normal" {
 		t.Fatalf("unexpected bucket: %#v", got)
 	}
-	if string(got.ResetsAt.Raw) != `"2026-09-05T20:00:00Z"` {
+	if string(got.ResetsAt.Raw) != `"2026-09-12T19:59:59.914725+00:00"` {
 		t.Fatalf("resetsAt raw = %s", got.ResetsAt.Raw)
 	}
 }
 
+func TestParseUsageLeavesMissingWindowsNil(t *testing.T) {
+	usage := parseUsage([]byte(`{"limits":[
+		{"kind":"weekly_scoped","percent":22,"scope":{"model":{"display_name":"Fable"}}}
+	]}`))
+	if usage.FiveHour != nil || usage.Weekly != nil {
+		t.Fatalf("unexpected windows: fiveHour=%#v weekly=%#v", usage.FiveHour, usage.Weekly)
+	}
+}
+
 func TestParseScopedBucketsPrefersActiveDuplicateInOriginalPosition(t *testing.T) {
-	buckets := parseScopedBuckets([]byte(`{"limits":[
+	buckets := parseUsage([]byte(`{"limits":[
 		{"kind":"weekly_scoped","percent":10,"scope":{"model":{"display_name":"Fable"}},"is_active":false},
 		{"kind":"weekly_scoped","percent":30,"scope":{"model":{"display_name":"Other"}},"is_active":false},
 		{"kind":"weekly_scoped","percent":55,"scope":{"model":{"display_name":"fable"}},"is_active":true}
-	]}`))
+	]}`)).Scoped
 	if len(buckets) != 2 || buckets[0].Label != "fable" || buckets[0].Percent != 55 || !buckets[0].IsActive || buckets[1].Label != "Other" {
 		t.Fatalf("unexpected buckets: %#v", buckets)
 	}
@@ -86,26 +101,30 @@ func TestParseScopedBucketsSkipsMalformedAndClampsPercent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := parseScopedBuckets([]byte(tt.body)); len(got) != 0 {
+			if got := parseUsage([]byte(tt.body)).Scoped; len(got) != 0 {
 				t.Fatalf("got %#v, want no buckets", got)
 			}
 		})
 	}
 
-	buckets := parseScopedBuckets([]byte(`{"limits":[
+	buckets := parseUsage([]byte(`{"limits":[
 		{"kind":"weekly_scoped","percent":140,"scope":{"model":{"id":"","display_name":" Over "}}},
 		{"kind":"weekly_scoped","percent":-2.5,"scope":{"model":{"display_name":"Under"}},"severity":4}
-	]}`))
+	]}`)).Scoped
 	if len(buckets) != 2 || buckets[0].ID != "over" || buckets[0].Percent != 100 || buckets[1].Percent != 0 || buckets[1].Severity != nil {
 		t.Fatalf("unexpected buckets: %#v", buckets)
 	}
 }
 
-func TestRefreshUsageSuccessWritesBuckets(t *testing.T) {
+func TestRefreshUsageSuccessWritesWindowsAndBuckets(t *testing.T) {
 	env := usageTestEnv(t)
 	writeUsageToken(t, env, "token")
 	now := time.UnixMilli(1_788_000_000_123)
-	body := []byte(`{"limits":[{"kind":"weekly_scoped","percent":38,"resets_at":1788638400,"scope":{"model":{"id":"opus","display_name":"Opus"}},"is_active":true}]}`)
+	body := []byte(`{"limits":[
+		{"kind":"session","percent":36,"resets_at":1788634800,"scope":null},
+		{"kind":"weekly_all","percent":14,"resets_at":1788638400,"scope":null},
+		{"kind":"weekly_scoped","percent":38,"resets_at":1788638400,"scope":{"model":{"id":"opus","display_name":"Opus"}},"is_active":true}
+	]}`)
 
 	got := refreshUsage(env, false, func(token string) ([]byte, error) {
 		if token != "token" {
@@ -113,7 +132,7 @@ func TestRefreshUsageSuccessWritesBuckets(t *testing.T) {
 		}
 		return body, nil
 	}, now)
-	if got == nil || len(got.Scoped) != 1 || got.Scoped[0].Label != "Opus" {
+	if got == nil || got.FiveHour == nil || got.Weekly == nil || len(got.Scoped) != 1 || got.Scoped[0].Label != "Opus" {
 		t.Fatalf("refresh result = %#v", got)
 	}
 
@@ -124,6 +143,11 @@ func TestRefreshUsageSuccessWritesBuckets(t *testing.T) {
 	scoped, ok := cache["scoped"].([]any)
 	if !ok || len(scoped) != 1 || scoped[0].(map[string]any)["label"] != "Opus" {
 		t.Fatalf("unexpected scoped cache: %#v", cache["scoped"])
+	}
+	fiveHour, fiveHourOK := cache["fiveHour"].(map[string]any)
+	weekly, weeklyOK := cache["weekly"].(map[string]any)
+	if !fiveHourOK || fiveHour["used_percentage"] != float64(36) || !weeklyOK || weekly["used_percentage"] != float64(14) {
+		t.Fatalf("unexpected window cache: fiveHour=%#v weekly=%#v", cache["fiveHour"], cache["weekly"])
 	}
 	if _, err := os.Stat(env.lockPath()); !os.IsNotExist(err) {
 		t.Fatalf("refresh lock remains: %v", err)
@@ -159,7 +183,8 @@ func TestRefreshUsageErrorKeepsPreviousBuckets(t *testing.T) {
 	if err := os.MkdirAll(env.cacheDir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	previous := `{"scoped":[{"id":"fable","label":"Fable","percent":12,"resetsAt":null,"severity":null,"isActive":false}],"fetchedAt":1}`
+	previous := `{"scoped":[{"id":"fable","label":"Fable","percent":12,"resetsAt":null,"severity":null,"isActive":false}],` +
+		`"fiveHour":{"used_percentage":16,"resets_at":1788634800},"weekly":{"used_percentage":12,"resets_at":1788638400},"fetchedAt":1}`
 	if err := os.WriteFile(env.usageCachePath(), []byte(previous), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -178,6 +203,27 @@ func TestRefreshUsageErrorKeepsPreviousBuckets(t *testing.T) {
 	scoped := cache["scoped"].([]any)
 	if len(scoped) != 1 || scoped[0].(map[string]any)["label"] != "Fable" {
 		t.Fatalf("previous buckets not retained: %#v", scoped)
+	}
+	fiveHour, fiveHourOK := cache["fiveHour"].(map[string]any)
+	weekly, weeklyOK := cache["weekly"].(map[string]any)
+	if !fiveHourOK || fiveHour["used_percentage"] != float64(16) || !weeklyOK || weekly["used_percentage"] != float64(12) {
+		t.Fatalf("previous windows not retained: fiveHour=%#v weekly=%#v", cache["fiveHour"], cache["weekly"])
+	}
+}
+
+func TestReadCachedUsageLoadsSnapshotWithoutWindows(t *testing.T) {
+	env := usageTestEnv(t)
+	if err := os.MkdirAll(env.cacheDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	previous := `{"scoped":[{"id":"fable","label":"Fable","percent":12,"resetsAt":null,"severity":null,"isActive":false}],"fetchedAt":1}`
+	if err := os.WriteFile(env.usageCachePath(), []byte(previous), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got := readCachedUsage(env)
+	if got == nil || len(got.Scoped) != 1 || got.FiveHour != nil || got.Weekly != nil {
+		t.Fatalf("cached usage = %#v", got)
 	}
 }
 
