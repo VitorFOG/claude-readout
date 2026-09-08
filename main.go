@@ -120,14 +120,19 @@ func run(args []string, stdin io.Reader, stdout io.Writer, env Env, getenv func(
 		}
 	}
 	scoped := []Bucket{}
+	var fiveHour, weekly *RateWindow
 	if cached != nil {
 		scoped = cached.Scoped
+		fiveHour = cached.FiveHour
+		weekly = cached.Weekly
 	}
 	out := renderHud(RenderInput{
 		Payload:   payload,
 		Config:    loaded.Config,
 		Git:       git,
 		Scoped:    scoped,
+		FiveHour:  fiveHour,
+		Weekly:    weekly,
 		ToolCalls: toolCalls,
 		Columns:   columns,
 		Style:     Style{Enabled: detectColorSupport(getenv) && !hasFlag("--no-color")},

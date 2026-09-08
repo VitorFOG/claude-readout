@@ -183,6 +183,34 @@ func TestRenderOmitsMissingData(t *testing.T) {
 	}
 }
 
+func TestRenderRateWindowsFallsBackToUsageCacheAndPrefersPayload(t *testing.T) {
+	var payload Payload
+	_, config, now := textRenderFixture()
+	fiveHour := RateWindow{UsedPercentage: floatPointer(16)}
+	weekly := RateWindow{UsedPercentage: floatPointer(12)}
+	in := RenderInput{
+		Payload:  payload,
+		Config:   config,
+		FiveHour: &fiveHour,
+		Weekly:   &weekly,
+		Style:    Style{},
+		Now:      now,
+	}
+
+	out := renderHud(in)
+	if !regexp.MustCompile(`5h .*16%`).MatchString(out) || !regexp.MustCompile(`wk .*12%`).MatchString(out) {
+		t.Fatalf("usage windows not rendered: %q", out)
+	}
+
+	payload.RateLimits.FiveHour = &RateWindow{UsedPercentage: floatPointer(38)}
+	payload.RateLimits.SevenDay = &RateWindow{UsedPercentage: floatPointer(14)}
+	in.Payload = payload
+	out = renderHud(in)
+	if !regexp.MustCompile(`5h .*38%`).MatchString(out) || !regexp.MustCompile(`wk .*14%`).MatchString(out) || strings.Contains(out, "16%") || strings.Contains(out, "12%") {
+		t.Fatalf("payload windows did not win: %q", out)
+	}
+}
+
 func renderWidthCase(columns int, overflow string) string {
 	payload, config, now := textRenderFixture()
 	if overflow != "" {

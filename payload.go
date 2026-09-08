@@ -94,7 +94,7 @@ type Payload struct {
 	} `json:"rate_limits"`
 }
 
-// RateWindow is one usage window from rate_limits.
+// RateWindow is one usage window from rate_limits or the usage snapshot.
 type RateWindow struct {
 	UsedPercentage *float64  `json:"used_percentage"`
 	ResetsAt       Timestamp `json:"resets_at"`

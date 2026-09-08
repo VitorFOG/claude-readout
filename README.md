@@ -59,8 +59,8 @@ Code at the binary that ran it.
 | Element | Shows | Source |
 | --- | --- | --- |
 | `model` | Model, with `1M` for the long-context variant | stdin |
-| `fiveHour` | 5-hour window, time to reset | stdin |
-| `weekly` | Weekly window, time to reset | stdin |
+| `fiveHour` | 5-hour window, time to reset | stdin, then usage API |
+| `weekly` | Weekly window, time to reset | stdin, then usage API |
 | `scoped` | Per-model weekly quota, printed as the model name | usage API |
 | `context` | Context window used | stdin |
 | `thinking` | Extended thinking, effort level | stdin |
@@ -69,8 +69,9 @@ Code at the binary that ran it.
 | `cost` | Session spend in USD, off by default | stdin |
 | `branch`, `gitStatus`, `repo` | Branch, working-tree counts, repository name (`repo` off by default) | `git` |
 
-Everything except the per-model quota comes from the JSON Claude Code hands the statusline on
-stdin. `claude-readout --legend` prints each element with its glyph.
+Most of the line comes from the JSON Claude Code hands the statusline on stdin. The per-model
+quota always comes from the usage API, and the two rate windows fall back to it.
+`claude-readout --legend` prints each element with its glyph.
 
 ## Configuration
 
@@ -106,7 +107,7 @@ is an override.
 | `overflow` | `"shrink"` | What happens when the line is wider than the pane. See below. |
 | `reserveColumns` | 2 | Cells held back for the pane border. |
 | `separator` | `│` | Between elements. |
-| `usageApi` | `true` | `false` skips the usage request. You keep the 5-hour and weekly meters and lose the per-model ones. |
+| `usageApi` | `true` | `false` skips the usage request. You lose its fallback for the 5-hour and weekly meters, and the per-model ones. |
 | `usageTtlSeconds` | 120 | How old the usage snapshot may get before a refresh. |
 
 **Narrow panes.** The line shrinks in steps before anything is cut. Reset times go first, then
@@ -117,13 +118,14 @@ the only signal a piped statusline gets. `READOUT_COLUMNS` overrides it for test
 
 Colour follows [`NO_COLOR`](https://no-color.org/), and `--no-color` forces it off.
 
-## How the per-model quota works
+## How the usage snapshot works
 
-Claude Code's payload carries the 5-hour and weekly windows but not the per-model buckets. Those
-come from `GET api.anthropic.com/api/oauth/usage`, read with the OAuth token Claude Code already
-stores in `~/.claude/.credentials.json`, or the login Keychain on macOS. Each `weekly_scoped`
-entry in the response becomes a meter labelled with its model name, so a new tier appears without
-a release here.
+Claude Code's payload carries no per-model buckets, and it carries the 5-hour and weekly windows
+only from its first response onward. Both come from `GET api.anthropic.com/api/oauth/usage`, read
+with the OAuth token Claude Code already stores in `~/.claude/.credentials.json`, or the login
+Keychain on macOS. Its `session` and `weekly_all` limits fill the two windows until the payload
+has them. Each `weekly_scoped` entry becomes a meter labelled with its model name, so a new tier
+appears without a release here.
 
 The request never runs on the render path. Each frame reads a cached snapshot from
 `~/.cache/claude-readout/usage.json`. When it is older than `usageTtlSeconds`, a detached
