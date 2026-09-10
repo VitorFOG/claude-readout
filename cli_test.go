@@ -102,7 +102,7 @@ func TestCLIRamp(t *testing.T) {
 }
 
 func TestCLIDoctor(t *testing.T) {
-	if out := runCLI(t, "", "--doctor"); !strings.Contains(out, "oauth token:") || !strings.Contains(out, "nerd font:   ") || strings.Contains(out, "nerd font:   not found") {
+	if out := runCLI(t, "", "--doctor"); !strings.Contains(out, "theme:       dark\n") || !strings.Contains(out, "oauth token:") || !strings.Contains(out, "nerd font:   ") || strings.Contains(out, "nerd font:   not found") {
 		t.Fatalf("doctor output: %q", out)
 	}
 }

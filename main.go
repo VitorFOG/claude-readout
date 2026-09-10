@@ -229,6 +229,7 @@ func printDoctor(w io.Writer, loaded LoadedConfig, env Env, getenv func(string) 
 		invalid = "  (INVALID: " + loaded.Err.Error() + ")"
 	}
 	_, _ = fmt.Fprintf(w, "config:      %s%s\n", loaded.Path, invalid)
+	_, _ = fmt.Fprintf(w, "theme:       %s\n", loaded.Config.Theme)
 	if path, ok := findNerdFont(fonts.Dirs); ok {
 		_, _ = fmt.Fprintf(w, "nerd font:   %s\n", path)
 	} else {

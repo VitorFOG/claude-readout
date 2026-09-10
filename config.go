@@ -18,6 +18,27 @@ type LoadedConfig struct {
 	Err error
 }
 
+// UnmarshalJSON selects the theme before decoding the full config so palette
+// keys merge over that theme while partial type errors keep decoded values.
+func (c *Config) UnmarshalJSON(data []byte) error {
+	var peek struct {
+		Theme string `json:"theme"`
+	}
+	_ = json.Unmarshal(data, &peek)
+
+	appliedTheme := "dark"
+	if _, ok := themes[peek.Theme]; ok {
+		c.Palette = themePalette(peek.Theme)
+		c.Theme = peek.Theme
+		appliedTheme = peek.Theme
+	}
+
+	type configAlias Config
+	err := json.Unmarshal(data, (*configAlias)(c))
+	c.Theme = appliedTheme
+	return err
+}
+
 // loadConfig reads the config file, if any, over defaultConfig().
 //
 // Merge semantics match the Node version: objects merge key by key (nested

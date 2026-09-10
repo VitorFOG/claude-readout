@@ -80,6 +80,7 @@ is an override.
 
 ```json
 {
+  "theme": "dark",
   "barWidth": 8,
   "elements": { "cost": true, "repo": true, "tools": false },
   "palette": {
@@ -97,6 +98,7 @@ is an override.
 | Key | Default | What it does |
 | --- | --- | --- |
 | `elements` | `cost` and `repo` off, the rest on | Any element from the table above, `true` or `false`. |
+| `theme` | `"dark"` | `"light"` switches every colour to the Tokyo Night Day palette for light terminal backgrounds. `palette` keys still override on top. |
 | `palette.bar` | green to 55%, amber at 80%, red at 100% | A ramp of `{ "at", "color" }` stops; the colour interpolates between them. A plain array of hex strings spreads evenly over 0 to 100. |
 | `palette.accent`, `muted`, `text`, `scoped`, `barEmpty`, `ok`, `warn`, `crit` | Tokyo Night | The other colours, as `#rrggbb`. |
 | `glyphs` | Nerd Font set | `"text"` for plain labels, or an object overriding single glyphs. |
