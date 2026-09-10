@@ -39,6 +39,48 @@ func TestConfigDeepMerge(t *testing.T) {
 	}
 }
 
+func TestConfigThemeSelectsPaletteBeforeOverrides(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"theme":"light","palette":{"accent":"#010203"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded := loadConfig(Env{ReadoutConfig: path})
+	if loaded.Err != nil {
+		t.Fatalf("loadConfig error: %v", loaded.Err)
+	}
+	if loaded.Config.Palette.Accent != "#010203" || loaded.Config.Palette.Text != "#3760bf" || loaded.Config.Theme != "light" {
+		t.Errorf("themed config = %+v", loaded.Config)
+	}
+}
+
+func TestConfigUnknownThemeKeepsDark(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"theme":"solarized"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded := loadConfig(Env{ReadoutConfig: path})
+	if loaded.Err != nil {
+		t.Fatalf("loadConfig error: %v", loaded.Err)
+	}
+	if loaded.Config.Theme != "dark" || !reflect.DeepEqual(loaded.Config.Palette, darkPalette()) {
+		t.Errorf("unknown theme config = %+v", loaded.Config)
+	}
+}
+
+func TestConfigThemeNullKeepsDark(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"theme":null}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded := loadConfig(Env{ReadoutConfig: path})
+	if loaded.Err != nil {
+		t.Fatalf("loadConfig error: %v", loaded.Err)
+	}
+	if loaded.Config.Theme != "dark" || !reflect.DeepEqual(loaded.Config.Palette, darkPalette()) {
+		t.Errorf("null theme config = %+v", loaded.Config)
+	}
+}
+
 func TestConfigSyntaxErrorUsesDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	if err := os.WriteFile(path, []byte(`{"barWidth":`), 0o600); err != nil {
@@ -56,7 +98,7 @@ func TestConfigSyntaxErrorUsesDefaults(t *testing.T) {
 
 func TestConfigTypeErrorKeepsPartialDecode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, []byte(`{"barWidth":"wide","labels":"always"}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"theme":"light","barWidth":"wide","labels":"always"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	loaded := loadConfig(Env{ReadoutConfig: path})
@@ -64,7 +106,7 @@ func TestConfigTypeErrorKeepsPartialDecode(t *testing.T) {
 	if !errors.As(loaded.Err, &typeErr) {
 		t.Fatalf("error = %T %v, want *json.UnmarshalTypeError", loaded.Err, loaded.Err)
 	}
-	if loaded.Config.BarWidth != 8 || loaded.Config.Labels != "always" {
+	if loaded.Config.BarWidth != 8 || loaded.Config.Labels != "always" || loaded.Config.Theme != "light" || loaded.Config.Palette.Text != "#3760bf" {
 		t.Errorf("partial config = %+v", loaded.Config)
 	}
 }

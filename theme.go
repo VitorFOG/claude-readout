@@ -194,7 +194,7 @@ func (r *Ramp) UnmarshalJSON(data []byte) error {
 }
 
 // Palette holds every colour the line uses, as "#rrggbb". The user's
-// "palette" object merges over defaultPalette key by key.
+// "palette" object merges over the selected theme key by key.
 type Palette struct {
 	Accent   string `json:"accent"`
 	Muted    string `json:"muted"`
@@ -207,9 +207,22 @@ type Palette struct {
 	Crit     string `json:"crit"`
 }
 
-// defaultPalette is Tokyo Night. The ramp holds green through 55%, warms to
+// themes centralizes the palettes so config decoding can select a theme before
+// merging the user's palette overrides.
+var themes = map[string]func() Palette{"dark": darkPalette, "light": lightPalette}
+
+// themePalette selects the requested theme, falling back to dark so invalid
+// config never leaves the statusline without readable colours.
+func themePalette(name string) Palette {
+	if palette, ok := themes[name]; ok {
+		return palette()
+	}
+	return darkPalette()
+}
+
+// darkPalette is Tokyo Night. The ramp holds green through 55%, warms to
 // amber by 80% and reaches red at 100%.
-func defaultPalette() Palette {
+func darkPalette() Palette {
 	return Palette{
 		Accent:   "#7aa2f7",
 		Muted:    "#565f89",
@@ -220,6 +233,21 @@ func defaultPalette() Palette {
 		OK:       "#9ece6a",
 		Warn:     "#e0af68",
 		Crit:     "#f7768e",
+	}
+}
+
+// lightPalette is Tokyo Night Day, for light terminal backgrounds.
+func lightPalette() Palette {
+	return Palette{
+		Accent:   "#2e7de9",
+		Muted:    "#848cb5",
+		Text:     "#3760bf",
+		Bar:      mustRamp(`[{"at":0,"color":"#587539"},{"at":55,"color":"#587539"},{"at":80,"color":"#8c6c3e"},{"at":100,"color":"#f52a65"}]`),
+		BarEmpty: "#c4c8da",
+		Scoped:   "#9854f1",
+		OK:       "#587539",
+		Warn:     "#8c6c3e",
+		Crit:     "#f52a65",
 	}
 }
 
@@ -234,6 +262,7 @@ func mustRamp(src string) Ramp {
 // Config is the user-facing configuration. Field names and defaults mirror the
 // README. Optional string keys that may be JSON null are pointers.
 type Config struct {
+	Theme           string       `json:"theme"`
 	Glyphs          GlyphSetting `json:"glyphs"`
 	Palette         Palette      `json:"palette"`
 	BarWidth        int          `json:"barWidth"`
@@ -272,8 +301,9 @@ func defaultConfig() Config {
 		names[k] = v
 	}
 	return Config{
+		Theme:           "dark",
 		Glyphs:          GlyphSetting{Mode: "nerd"},
-		Palette:         defaultPalette(),
+		Palette:         themePalette("dark"),
 		BarWidth:        8,
 		ContextBarWidth: 10,
 		Labels:          "auto",
